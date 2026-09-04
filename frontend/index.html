@@ -12,10 +12,18 @@
     --card-border: #242938;
     --text: #eef0f4;
     --muted: #8b93a5;
-    --accent: #7c9eff;
-    --accent-soft: rgba(124, 158, 255, 0.14);
-    --green: #4ade80;
-    --red: #f87171;
+    --accent: #8ba8f0;
+    --accent-soft: rgba(139, 168, 240, 0.13);
+    --green: #7cd9a8;
+    --green-soft: rgba(124, 217, 168, 0.16);
+    --red: #ec9a9a;
+    --red-soft: rgba(236, 154, 154, 0.16);
+    --amber: #f0c987;
+    --amber-soft: rgba(240, 201, 135, 0.16);
+    --lilac: #b8a8e8;
+    --lilac-soft: rgba(184, 168, 232, 0.16);
+    --teal: #7fd4c9;
+    --teal-soft: rgba(127, 212, 201, 0.16);
     --radius-lg: 20px;
     --radius-md: 14px;
     --radius-sm: 10px;
@@ -112,6 +120,27 @@
     border: 1px solid var(--card-border);
   }
   .chip .chip-icon { opacity: 0.7; }
+
+  /* Riepilogo: tile colorate con icona */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-tile {
+    border-radius: var(--radius-md); padding: 14px 16px; display: flex;
+    flex-direction: column; gap: 4px; grid-column: span 1;
+  }
+  .stat-tile.wide { grid-column: span 2; }
+  .stat-icon { font-size: 20px; line-height: 1; margin-bottom: 2px; }
+  .stat-value { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .stat-label { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+
+  /* Badge di variazione % anno su anno */
+  .year-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .year-badge {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 12px; border-radius: var(--radius-md); background: rgba(255,255,255,0.03);
+    border: 1px solid var(--card-border); min-width: 68px;
+  }
+  .year-badge .yb-year { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .year-badge .yb-delta { font-size: 13px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -136,12 +165,19 @@
 
   <div class="card">
     <h2>Riepilogo</h2>
-    <div id="summary" style="font-size:14px; line-height:1.8;">—</div>
+    <div id="summary" class="stat-grid">—</div>
   </div>
 
   <div class="card full">
     <h2>Andamento lordo / netto / rimborsi</h2>
     <canvas id="trendChart" height="90"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Media netto per anno</h2>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Confronto affiancato, esclusi i rimborsi</div>
+    <canvas id="netByYearChart" height="140"></canvas>
+    <div class="year-badges" id="netByYearBadges"></div>
   </div>
 
   <div class="card">
@@ -156,6 +192,7 @@
       RAL = totale mensile "Elementi della retribuzione" × mensilità, per anno (esclude dicembre quando c'è un mese alternativo, per via della tredicesima caricata nello stesso cedolino)
     </div>
     <canvas id="ralChart" height="140"></canvas>
+    <div class="year-badges" id="ralYearBadges"></div>
     <div style="border-top:1px solid var(--card-border); margin-top:14px; padding-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label style="font-size:13px; color:var(--muted);">Mensilità annue:</label>
       <select id="mensilitaSelect">
@@ -223,6 +260,7 @@ const MONTHS = ["", "Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott",
 let chartInstance = null;
 let netChartInstance = null;
 let ralChartInstance = null;
+let netByYearChartInstance = null;
 
 async function api(path, opts) {
   const res = await fetch(`/api${path}`, opts);
@@ -275,26 +313,38 @@ async function refreshAll() {
   renderTable(payslips, raises);
   renderChart(trend);
   renderNetChart(trend);
+  renderNetByYearChart(payslips);
   renderRalChart(ralByYear);
   renderCategories(categories);
 }
 
 function renderSummary(payslips) {
   const el = document.getElementById("summary");
-  if (!payslips.length) { el.textContent = "Nessuna busta paga caricata."; return; }
+  if (!payslips.length) {
+    el.innerHTML = `<div class="stat-tile wide" style="background:var(--accent-soft);"><span class="stat-icon">📄</span><span class="stat-value">Nessuna busta paga</span><span class="stat-label">Caricane una per iniziare</span></div>`;
+    return;
+  }
   const totalReimb = payslips.reduce((s, p) => s + (p.reimbursements || 0), 0);
   const avgNet = payslips.reduce((s, p) => s + p.net_pay, 0) / payslips.length;
   const last = payslips[0];
-  const ralLine = last.ral
-    ? `RAL attuale: <b>€ ${last.ral.toFixed(2)}</b><br/>`
-    : "";
-  el.innerHTML = `
-    Buste paga caricate: <b>${payslips.length}</b><br/>
-    Ultimo netto (${MONTHS[last.month]} ${last.year}): <b>€ ${last.net_pay.toFixed(2)}</b><br/>
-    Media netto: <b>€ ${avgNet.toFixed(2)}</b><br/>
-    Totale rimborsi: <b>€ ${totalReimb.toFixed(2)}</b><br/>
-    ${ralLine}
-  `;
+
+  const tiles = [
+    { icon: "📄", label: "Buste caricate", value: String(payslips.length), bg: "var(--accent-soft)" },
+    { icon: "💶", label: `Ultimo netto (${MONTHS[last.month]} ${last.year})`, value: `€ ${last.net_pay.toFixed(2)}`, bg: "var(--green-soft)" },
+    { icon: "📊", label: "Media netto complessiva", value: `€ ${avgNet.toFixed(2)}`, bg: "var(--lilac-soft)" },
+    { icon: "💰", label: "Totale rimborsi", value: `€ ${totalReimb.toFixed(2)}`, bg: "var(--amber-soft)" },
+  ];
+  if (last.ral) {
+    tiles.push({ icon: "📈", label: "RAL attuale", value: `€ ${last.ral.toFixed(2)}`, bg: "var(--teal-soft)", wide: true });
+  }
+
+  el.innerHTML = tiles.map(t => `
+    <div class="stat-tile${t.wide ? ' wide' : ''}" style="background:${t.bg};">
+      <span class="stat-icon">${t.icon}</span>
+      <span class="stat-value">${t.value}</span>
+      <span class="stat-label">${t.label}</span>
+    </div>
+  `).join("");
 }
 
 function renderTable(payslips, raises) {
@@ -327,7 +377,7 @@ function renderTable(payslips, raises) {
       <td>${fmt(p.base_pay)}</td>
       <td>${fmt(p.contingenza)}</td>
       <td>${fmt(p.scatti)}</td>
-      <td><button data-id="${p.id}" class="delBtn" style="background:rgba(248,113,113,0.12);color:#f87171;">✕</button></td>
+      <td><button data-id="${p.id}" class="delBtn" style="background:rgba(236,154,154,0.12);color:#ec9a9a;">✕</button></td>
     `;
     body.appendChild(tr);
   });
@@ -337,6 +387,67 @@ function renderTable(payslips, raises) {
       refreshAll();
     });
   });
+}
+
+// Renderizza una fila di badge con la variazione % rispetto all'anno
+// precedente. `points` è [{year, value}, ...] ordinato per anno crescente.
+function renderYearBadges(containerId, points) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (points.length < 2) { el.innerHTML = ""; return; }
+
+  el.innerHTML = points.map((p, i) => {
+    if (i === 0) {
+      return `<div class="year-badge"><span class="yb-year">${p.year}</span><span class="yb-delta" style="color:var(--muted);">base</span></div>`;
+    }
+    const prev = points[i - 1].value;
+    const delta = prev !== 0 ? ((p.value - prev) / Math.abs(prev)) * 100 : 0;
+    const positive = delta >= 0;
+    const color = positive ? "var(--green)" : "var(--red)";
+    const arrow = positive ? "▲" : "▼";
+    return `<div class="year-badge"><span class="yb-year">${p.year}</span><span class="yb-delta" style="color:${color};">${arrow} ${Math.abs(delta).toFixed(1)}%</span></div>`;
+  }).join("");
+}
+
+function renderNetByYearChart(payslips) {
+  const byYear = {};
+  payslips.forEach(p => {
+    if (!byYear[p.year]) byYear[p.year] = [];
+    byYear[p.year].push(p.net_pay);
+  });
+  const years = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+  const averages = years.map(y => byYear[y].reduce((s, v) => s + v, 0) / byYear[y].length);
+
+  const ctx = document.getElementById("netByYearChart").getContext("2d");
+  if (netByYearChartInstance) netByYearChartInstance.destroy();
+
+  if (!years.length) {
+    document.getElementById("netByYearBadges").innerHTML = "";
+    return;
+  }
+
+  netByYearChartInstance = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: years.map(String),
+      datasets: [{
+        label: "Media netto",
+        data: averages,
+        backgroundColor: "rgba(124,217,168,0.55)",
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8b93a5" }, grid: { display: false } },
+        y: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
+      },
+    },
+  });
+
+  renderYearBadges("netByYearBadges", years.map((y, i) => ({ year: y, value: averages[i] })));
 }
 
 function renderChart(trend) {
@@ -350,7 +461,7 @@ function renderChart(trend) {
       datasets: [
         { label: "Netto", data: trend.map(t => t.net_pay), borderColor: "#4ade80", tension: 0.3 },
         { label: "Lordo", data: trend.map(t => t.gross_pay), borderColor: "#7c9eff", tension: 0.3 },
-        { label: "Rimborsi", data: trend.map(t => t.reimbursements), borderColor: "#facc15", tension: 0.3 },
+        { label: "Rimborsi", data: trend.map(t => t.reimbursements), borderColor: "#f0c987", tension: 0.3 },
       ],
     },
     options: {
@@ -411,7 +522,7 @@ function renderRalChart(ralByYear) {
         {
           label: "RAL",
           data: ralByYear.map(p => p.ral),
-          backgroundColor: "rgba(244,114,182,0.55)",
+          backgroundColor: "rgba(184,168,232,0.55)",
           borderRadius: 8,
         },
       ],
@@ -432,6 +543,8 @@ function renderRalChart(ralByYear) {
       },
     },
   });
+
+  renderYearBadges("ralYearBadges", ralByYear.map(p => ({ year: p.year, value: p.ral })));
 }
 
 document.getElementById("recomputeRalBtn").addEventListener("click", async () => {
@@ -533,7 +646,7 @@ function renderCategories(categories) {
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;">
         <span class="cat-badge" style="background:${color.bg}; color:${color.fg};">${c.name}</span>
-        <button data-id="${c.id}" class="delCatBtn" style="background:rgba(248,113,113,0.12); color:#f87171; flex-shrink:0; padding:6px 12px; font-size:12px;">✕</button>
+        <button data-id="${c.id}" class="delCatBtn" style="background:rgba(236,154,154,0.12); color:#ec9a9a; flex-shrink:0; padding:6px 12px; font-size:12px;">✕</button>
       </div>
       <div class="chip-row">${codeChips}${keywordChips || (!codeChips ? '<span class="chip">Nessuna regola</span>' : '')}</div>
     `;
