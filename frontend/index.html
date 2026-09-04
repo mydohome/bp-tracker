@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tracker Buste Paga</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #262b36;
+    --text: #e8eaed;
+    --muted: #9aa3af;
+    --accent: #6ea8fe;
+    --green: #4ade80;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 960px; margin: 0 auto; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2 { font-size: 16px; margin-top: 0; margin-bottom: 12px; }
+  .full { grid-column: 1 / -1; }
+  input[type=file] {
+    width: 100%; padding: 10px; background: #0f1115; border: 1px dashed var(--border);
+    border-radius: 8px; color: var(--text); margin-bottom: 12px;
+  }
+  button {
+    background: var(--accent); color: #0f1115; border: none; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 14px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+  #chatLog { max-height: 240px; overflow-y: auto; margin-bottom: 12px; font-size: 14px; }
+  .msg { margin-bottom: 10px; }
+  .msg .who { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+  .chatRow { display: flex; gap: 8px; }
+  .chatRow input {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: #0f1115; color: var(--text);
+  }
+  .privacy-note {
+    font-size: 12px; color: var(--muted); border-left: 3px solid var(--accent);
+    padding-left: 10px; margin-top: 10px; line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<h1>📄 Tracker Buste Paga</h1>
+<div class="subtitle">Carica il PDF ogni mese: gli importi vengono estratti e archiviati automaticamente.</div>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Carica busta paga (PDF)</h2>
+    <input type="file" id="fileInput" accept="application/pdf" />
+    <button id="uploadBtn">Carica ed interpreta</button>
+    <div class="status" id="uploadStatus"></div>
+    <div class="privacy-note">
+      🔒 Prima dell'invio al modello, nome, codice fiscale, indirizzo, IBAN, email e telefono
+      vengono rimossi automaticamente dal testo. Nel database restano solo gli importi.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Riepilogo</h2>
+    <div id="summary" style="font-size:14px; line-height:1.8;">—</div>
+  </div>
+
+  <div class="card full">
+    <h2>Andamento nel tempo</h2>
+    <canvas id="trendChart" height="90"></canvas>
+  </div>
+
+  <div class="card full">
+    <h2>Storico mensile</h2>
+    <table>
+      <thead>
+        <tr><th>Periodo</th><th>Lordo</th><th>Netto</th><th>Rimborsi</th><th>Δ Netto</th><th></th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card full">
+    <h2>💬 Chiedi a Claude sui tuoi dati</h2>
+    <div id="chatLog"></div>
+    <div class="chatRow">
+      <input id="chatInput" placeholder="Es: quanto è aumentato il mio netto negli ultimi 6 mesi?" />
+      <button id="chatBtn">Invia</button>
+    </div>
+    <div class="privacy-note">
+      Solo importi aggregati (nessun dato anagrafico) vengono inviati per rispondere alla domanda.
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MONTHS = ["", "Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+let chartInstance = null;
+
+async function api(path, opts) {
+  const res = await fetch(`/api${path}`, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Errore");
+  }
+  return res.json();
+}
+
+async function refreshAll() {
+  const [payslips, trend, raises] = await Promise.all([
+    api("/payslips"),
+    api("/stats/trend"),
+    api("/stats/raises"),
+  ]);
+  renderSummary(payslips);
+  renderTable(payslips, raises);
+  renderChart(trend);
+}
+
+function renderSummary(payslips) {
+  const el = document.getElementById("summary");
+  if (!payslips.length) { el.textContent = "Nessuna busta paga caricata."; return; }
+  const totalReimb = payslips.reduce((s, p) => s + (p.reimbursements || 0), 0);
+  const avgNet = payslips.reduce((s, p) => s + p.net_pay, 0) / payslips.length;
+  const last = payslips[0];
+  el.innerHTML = `
+    Buste paga caricate: <b>${payslips.length}</b><br/>
+    Ultimo netto (${MONTHS[last.month]} ${last.year}): <b>€ ${last.net_pay.toFixed(2)}</b><br/>
+    Media netto: <b>€ ${avgNet.toFixed(2)}</b><br/>
+    Totale rimborsi: <b>€ ${totalReimb.toFixed(2)}</b>
+  `;
+}
+
+function renderTable(payslips, raises) {
+  const raiseMap = {};
+  raises.forEach(r => raiseMap[`${r.year}-${r.month}`] = r.delta_net);
+
+  const body = document.getElementById("tableBody");
+  body.innerHTML = "";
+  payslips.forEach(p => {
+    const delta = raiseMap[`${p.year}-${p.month}`];
+    const deltaHtml = delta === null || delta === undefined
+      ? "—"
+      : `<span class="${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '+' : ''}€ ${delta.toFixed(2)}</span>`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${MONTHS[p.month]} ${p.year}</td>
+      <td>€ ${p.gross_pay.toFixed(2)}</td>
+      <td>€ ${p.net_pay.toFixed(2)}</td>
+      <td>€ ${p.reimbursements.toFixed(2)}</td>
+      <td>${deltaHtml}</td>
+      <td><button data-id="${p.id}" class="delBtn" style="background:#262b36;color:#f87171;">✕</button></td>
+    `;
+    body.appendChild(tr);
+  });
+  document.querySelectorAll(".delBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await api(`/payslips/${btn.dataset.id}`, { method: "DELETE" });
+      refreshAll();
+    });
+  });
+}
+
+function renderChart(trend) {
+  const labels = trend.map(t => `${MONTHS[t.month]} ${t.year}`);
+  const ctx = document.getElementById("trendChart").getContext("2d");
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Netto", data: trend.map(t => t.net_pay), borderColor: "#4ade80", tension: 0.3 },
+        { label: "Lordo", data: trend.map(t => t.gross_pay), borderColor: "#6ea8fe", tension: 0.3 },
+        { label: "Rimborsi", data: trend.map(t => t.reimbursements), borderColor: "#facc15", tension: 0.3 },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
+        y: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
+      },
+      plugins: { legend: { labels: { color: "#e8eaed" } } },
+    },
+  });
+}
+
+document.getElementById("uploadBtn").addEventListener("click", async () => {
+  const input = document.getElementById("fileInput");
+  const status = document.getElementById("uploadStatus");
+  if (!input.files.length) { status.textContent = "Seleziona un PDF."; return; }
+  const fd = new FormData();
+  fd.append("file", input.files[0]);
+  status.textContent = "Interpretazione in corso…";
+  document.getElementById("uploadBtn").disabled = true;
+  try {
+    await api("/upload", { method: "POST", body: fd });
+    status.textContent = "✅ Busta paga registrata.";
+    input.value = "";
+    refreshAll();
+  } catch (e) {
+    status.textContent = "❌ " + e.message;
+  } finally {
+    document.getElementById("uploadBtn").disabled = false;
+  }
+});
+
+document.getElementById("chatBtn").addEventListener("click", async () => {
+  const input = document.getElementById("chatInput");
+  const log = document.getElementById("chatLog");
+  const q = input.value.trim();
+  if (!q) return;
+  log.innerHTML += `<div class="msg"><div class="who">Tu</div>${q}</div>`;
+  input.value = "";
+  log.scrollTop = log.scrollHeight;
+  try {
+    const res = await api("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q }),
+    });
+    log.innerHTML += `<div class="msg"><div class="who">Claude</div>${res.answer}</div>`;
+  } catch (e) {
+    log.innerHTML += `<div class="msg"><div class="who">Errore</div>${e.message}</div>`;
+  }
+  log.scrollTop = log.scrollHeight;
+});
+document.getElementById("chatInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("chatBtn").click();
+});
+
+refreshAll().catch(() => {});
+</script>
+</body>
+</html>
