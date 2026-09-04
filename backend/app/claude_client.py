@@ -3,6 +3,7 @@ import json
 import re
 import time
 from anthropic import Anthropic, APIError, RateLimitError, APIConnectionError
+from .zucchetti_format import is_zucchetti_format, ZUCCHETTI_HINT
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
@@ -49,18 +50,17 @@ Ogni voce di questo tipo trovata nel documento va:
 Se non trovi nessuna voce di questo tipo, usa "reimbursements": 0 — ma prima
 di concludere che sono assenti, ricontrolla l'intero testo una seconda volta.
 
-Cerca inoltre questi dati, tipicamente riportati nell'intestazione o nel
-riepilogo delle competenze fisse del cedolino:
+Cerca inoltre il riquadro intitolato "ELEMENTI DELLA RETRIBUZIONE" (a volte
+"Elementi fissi" o simile), di solito nella parte alta del cedolino: contiene
+le componenti fisse della retribuzione lorda mensile (es. MINIMO, CONTING.,
+E.D.R., EL. RETR., eventuali scatti, superminimi, indennità varie...) seguite
+da una riga "TOTALE". Riporta OGNI voce di quel riquadro esattamente come
+appare (etichetta ed importo, anche se abbreviata), e separatamente il
+valore della riga "TOTALE" del riquadro stesso.
 
-- RAL (Retribuzione Annua Lorda): spesso indicata in alto nel cedolino
-  come "RAL", "Retribuzione annua lorda", "Retribuzione annua", talvolta
-  vicino al livello di inquadramento. È un importo annuale, non mensile.
-- Paga base / minimo contrattuale / minimo tabellare: la voce fissa di
-  base della retribuzione lorda (esclusi scatti, superminimi, ecc.).
-- Contingenza (indennità di contingenza): spesso assente nei CCNL più
-  recenti perché assorbita nella paga base — se non la trovi, usa 0.
-- Scatti di anzianità (o "scatti maturati"): importo degli scatti, se
-  presenti come voce separata.
+NON calcolare né stimare la RAL (Retribuzione Annua Lorda): questa
+applicazione la calcola automaticamente a partire dal totale di quel
+riquadro, non serve che tu la deduca o la cerchi altrove nel documento.
 
 Rispondi SOLO con un oggetto JSON valido, senza markdown, senza testo prima o dopo,
 con questa struttura esatta:
@@ -73,10 +73,8 @@ con questa struttura esatta:
   "net_pay": <float, netto ESATTAMENTE come riportato sul cedolino (es. "netto a pagare"/"netto in busta"), SENZA sottrarre nulla: se il cedolino include i rimborsi nel netto finale, riporta quel valore così com'è>,
   "reimbursements": <float, somma di tutte le voci di rimborso/trasferta/diaria individuate, 0 se davvero assenti>,
   "total_deductions": <float, totale trattenute/contributi/IRPEF>,
-  "ral": <float, Retribuzione Annua Lorda se indicata nel documento, altrimenti null>,
-  "base_pay": <float, paga base/minimo contrattuale, altrimenti null>,
-  "contingenza": <float, indennità di contingenza, 0 se assente/assorbita>,
-  "scatti": <float, scatti di anzianità, 0 se assenti>,
+  "elementi_retribuzione": [{"label": <string>, "amount": <float>}, ...],
+  "elementi_retribuzione_totale": <float, valore della riga TOTALE del riquadro "Elementi della retribuzione", null se il riquadro non è presente nel documento>,
   "earnings_detail": [{"label": <string>, "amount": <float>}, ...],
   "deductions_detail": [{"label": <string>, "amount": <float>}, ...]
 }
@@ -108,10 +106,17 @@ def _extract_json_object(text: str) -> str:
 
 def _call_and_parse(anonymized_text: str, max_tokens: int) -> tuple[dict, str]:
     client = get_client()
+
+    # Aggiungiamo l'indicazione sul formato Zucchetti solo se rilevato:
+    # non allunga il prompt per gli altri formati di cedolino.
+    system_prompt = EXTRACTION_SYSTEM_PROMPT
+    if is_zucchetti_format(anonymized_text):
+        system_prompt += ZUCCHETTI_HINT
+
     response = client.messages.create(
         model=MODEL,
         max_tokens=max_tokens,
-        system=EXTRACTION_SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[{"role": "user", "content": anonymized_text}],
     )
     text = "".join(

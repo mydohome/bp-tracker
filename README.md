@@ -117,9 +117,16 @@ Il backend è raggiungibile anche direttamente su `http://localhost:8000`
   rimborsi spese** (che vengono scorporati automaticamente dal "netto a
   pagare" riportato sul cedolino). Il netto "così come stampato sul
   cedolino" resta comunque salvato internamente per trasparenza.
-- **RAL, minimo (paga base), contingenza, scatti di anzianità**: tracciati
-  per ogni cedolino quando presenti nel documento, per seguirne l'andamento
-  nel tempo (es. un aumento della RAL o uno scatto maturato).
+- **RAL, minimo, contingenza, scatti**: la maggior parte dei cedolini
+  italiani NON riporta un valore "RAL" esplicito. Questa app lo calcola
+  automaticamente: legge il riquadro "Elementi della retribuzione" (o
+  equivalente) in cima al cedolino — quello con minimo, contingenza,
+  eventuali scatti, superminimi ecc. e una riga TOTALE — e moltiplica quel
+  totale mensile per il numero di mensilità annue (12/13/14, configurabile
+  nella card "Andamento della RAL"). Il calcolo è puro codice locale, non
+  richiede una chiamata a Claude: se cambi il numero di mensilità puoi
+  premere "Ricalcola RAL" per aggiornare retroattivamente tutte le buste
+  paga già caricate **senza consumare token API**.
 - Tre grafici: andamento combinato lordo/netto/rimborsi, andamento del solo
   netto, andamento della RAL nel tempo (a gradini, perché resta costante fino
   al prossimo aumento).

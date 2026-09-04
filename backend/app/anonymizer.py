@@ -22,6 +22,15 @@ IBAN_REGEX = re.compile(r"\bIT\d{2}[A-Za-z]\d{22}\b|\bIT\d{2}\s?[A-Za-z0-9\s]{20
 EMAIL_REGEX = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 PHONE_REGEX = re.compile(r"\b(?:\+39\s?)?3\d{2}[\s./-]?\d{6,7}\b")
 
+# Le righe "Addizionale regionale/comunale" riportano regione e comune di
+# residenza (utili per capire l'importo trattenuto, non per identificare la
+# persona): rimuoviamo solo il nome del luogo, mantenendo intatti codice
+# voce e importi, che servono per l'estrazione.
+ADDIZIONALE_LOCATION_REGEX = re.compile(
+    r"(Addizionale\s+(?:regionale|comunale)\s*\d{0,4}\s+)([A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ'\.\s]{1,40}?)(?=\s+Residuo\b)",
+    re.IGNORECASE,
+)
+
 # Etichette tipiche delle buste paga italiane che precedono dati anagrafici.
 # Rimuoviamo l'intera riga quando compare una di queste etichette.
 LABELED_LINE_REGEX = re.compile(
@@ -42,6 +51,7 @@ def anonymize_text(raw_text: str) -> str:
     text = IBAN_REGEX.sub("[IBAN_RIMOSSO]", text)
     text = EMAIL_REGEX.sub("[EMAIL_RIMOSSA]", text)
     text = PHONE_REGEX.sub("[TELEFONO_RIMOSSO]", text)
+    text = ADDIZIONALE_LOCATION_REGEX.sub(r"\1[LOCALITA_RIMOSSA]", text)
     text = LABELED_LINE_REGEX.sub("[RIGA_ANAGRAFICA_RIMOSSA]", text)
 
     return text

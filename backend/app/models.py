@@ -33,14 +33,24 @@ class Payslip(Base):
     reimbursements_breakdown = Column(JSON, nullable=True)    # [{"category": nome, "amount": float}, ...]
     total_deductions = Column(Float, nullable=False, default=0)  # trattenute/contributi/IRPEF
 
-    # RAL (Retribuzione Annua Lorda) indicata nel cedolino (di solito in alto/intestazione).
+    # RAL (Retribuzione Annua Lorda): NON è quasi mai stampata esplicitamente
+    # sul cedolino. Viene CALCOLATA da questa applicazione (non dal modello)
+    # come elementi_retribuzione_totale × mensilità annue configurate.
     ral = Column(Float, nullable=True)
 
-    # Componenti fisse della retribuzione lorda, tracciate separatamente
-    # per seguirne l'andamento nel tempo (aumenti di minimo, scatti maturati, ecc.)
+    # Componenti fisse della retribuzione lorda, riconosciute a partire dal
+    # riquadro "Elementi della retribuzione" (vedi sotto), per seguirne
+    # l'andamento nel tempo (aumenti di minimo, scatti maturati, ecc.)
     base_pay = Column(Float, nullable=True)      # paga base / minimo contrattuale
     contingenza = Column(Float, nullable=True)   # indennità di contingenza
     scatti = Column(Float, nullable=True)        # scatti di anzianità
+
+    # Riquadro "Elementi della retribuzione" così come appare sul cedolino
+    # (etichette e importi grezzi), più il valore della sua riga TOTALE.
+    # Da questo totale si calcola la RAL: è il dato più affidabile perché
+    # non richiede al modello di indovinare quali voci sommare.
+    elementi_retribuzione = Column(JSON, nullable=True)          # [{label, amount}, ...]
+    elementi_retribuzione_totale = Column(Float, nullable=True)
 
     earnings_detail = Column(JSON, nullable=True)     # [{label, amount}, ...]
     deductions_detail = Column(JSON, nullable=True)   # [{label, amount}, ...]
@@ -64,3 +74,17 @@ class ReimbursementCategory(Base):
     codes = Column(JSON, nullable=True, default=list)     # es. ["F00880"]
     keywords = Column(JSON, nullable=True, default=list)  # es. ["rimborso spese", "note spese"]
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppSetting(Base):
+    """
+    Piccola tabella chiave/valore per impostazioni globali dell'app.
+    Attualmente usata solo per "mensilita_annue" (12/13/14), il moltiplicatore
+    usato per calcolare la RAL dal totale del riquadro "Elementi della
+    retribuzione".
+    """
+
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False)

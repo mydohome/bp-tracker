@@ -16,6 +16,8 @@ NEW_COLUMNS = [
     ("contingenza", "DOUBLE PRECISION"),
     ("scatti", "DOUBLE PRECISION"),
     ("reimbursements_breakdown", "JSON"),
+    ("elementi_retribuzione", "JSON"),
+    ("elementi_retribuzione_totale", "DOUBLE PRECISION"),
 ]
 
 

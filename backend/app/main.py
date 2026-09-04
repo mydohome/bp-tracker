@@ -8,8 +8,10 @@ from . import models, schemas
 from .database import engine, get_db, Base, SessionLocal
 from .pdf_extract import extract_text_from_pdf
 from .anonymizer import anonymize_text
+from .zucchetti_format import strip_boilerplate_noise
 from .claude_client import extract_payslip_data, ask_about_payslips
 from .reimbursement_check import reconcile_reimbursements
+from .retribution_elements import parse_elementi_retribuzione, calculate_ral
 from .migrations import run_migrations
 
 Base.metadata.create_all(bind=engine)
@@ -46,6 +48,23 @@ def seed_default_reimbursement_categories():
 
 seed_default_reimbursement_categories()
 
+DEFAULT_MENSILITA = "13"  # standard in Italia (12 mensilità + tredicesima)
+
+
+def get_setting(db: Session, key: str, default: str) -> str:
+    row = db.get(models.AppSetting, key)
+    return row.value if row else default
+
+
+def set_setting(db: Session, key: str, value: str) -> None:
+    row = db.get(models.AppSetting, key)
+    if row:
+        row.value = value
+    else:
+        row = models.AppSetting(key=key, value=value)
+        db.add(row)
+    db.commit()
+
 app = FastAPI(title="Payslip Tracker")
 
 app.add_middleware(
@@ -76,6 +95,10 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
     # 2. Anonimizza: rimuove nome, CF, indirizzo, IBAN, email, telefono
     #    PRIMA di qualsiasi invio verso l'esterno.
     anonymized = anonymize_text(raw_text)
+
+    # 2b. Rimuove rumore ricorrente (watermark/copyright ripetuti nei
+    #     cedolini Zucchetti): riduce i token in input senza perdere dati.
+    anonymized = strip_boilerplate_noise(anonymized)
 
     # 3. Invia SOLO il testo anonimizzato a Claude per l'estrazione strutturata.
     #    A questo punto raw_text (con i dati personali) esce dallo scope
@@ -117,6 +140,16 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
     net_pay_stated = float(data.get("net_pay") or 0)
     net_pay_salary = round(net_pay_stated - reimbursements, 2)
 
+    # Minimo/contingenza/scatti/RAL vengono ricavati in Python dal riquadro
+    # "Elementi della retribuzione" estratto grezzo, NON chiesti al modello:
+    # più affidabile (niente hallucination sulla RAL, che raramente è
+    # stampata esplicitamente) e più economico in token.
+    elementi = data.get("elementi_retribuzione") or []
+    elementi_totale = data.get("elementi_retribuzione_totale")
+    elementi_totale = float(elementi_totale) if elementi_totale not in (None, "") else None
+    parsed_elementi = parse_elementi_retribuzione(elementi)
+    mensilita = int(get_setting(db, "mensilita_annue", DEFAULT_MENSILITA))
+
     record.employer_label = data.get("employer_label")
     record.gross_pay = float(data.get("gross_pay") or 0)
     record.net_pay = net_pay_salary
@@ -124,10 +157,12 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
     record.reimbursements = reimbursements
     record.reimbursements_breakdown = reimbursements_breakdown
     record.total_deductions = float(data.get("total_deductions") or 0)
-    record.ral = float(data["ral"]) if data.get("ral") not in (None, "") else None
-    record.base_pay = float(data.get("base_pay") or 0)
-    record.contingenza = float(data.get("contingenza") or 0)
-    record.scatti = float(data.get("scatti") or 0)
+    record.ral = calculate_ral(elementi_totale, mensilita)
+    record.base_pay = parsed_elementi["base_pay"]
+    record.contingenza = parsed_elementi["contingenza"]
+    record.scatti = parsed_elementi["scatti"]
+    record.elementi_retribuzione = elementi
+    record.elementi_retribuzione_totale = elementi_totale
     record.earnings_detail = earnings_detail
     record.deductions_detail = data.get("deductions_detail") or []
     record.notes = reconciliation_note
@@ -263,6 +298,41 @@ def delete_reimbursement_category(category_id: int, db: Session = Depends(get_db
     db.delete(category)
     db.commit()
     return {"status": "deleted"}
+
+
+# --- Impostazione mensilità (per il calcolo della RAL) ---
+
+@app.get("/api/settings/mensilita", response_model=schemas.MensilitaOut)
+def get_mensilita(db: Session = Depends(get_db)):
+    return schemas.MensilitaOut(mensilita=int(get_setting(db, "mensilita_annue", DEFAULT_MENSILITA)))
+
+
+@app.put("/api/settings/mensilita", response_model=schemas.MensilitaOut)
+def update_mensilita(payload: schemas.MensilitaIn, db: Session = Depends(get_db)):
+    if payload.mensilita not in (12, 13, 14):
+        raise HTTPException(400, "Il numero di mensilità deve essere 12, 13 o 14.")
+    set_setting(db, "mensilita_annue", str(payload.mensilita))
+    return schemas.MensilitaOut(mensilita=payload.mensilita)
+
+
+@app.post("/api/recompute-ral")
+def recompute_ral(db: Session = Depends(get_db)):
+    """
+    Ricalcola la RAL di tutte le buste paga già caricate usando il totale
+    del riquadro "Elementi della retribuzione" già salvato e la mensilità
+    attualmente configurata. Puro calcolo locale: NESSUNA chiamata a Claude,
+    quindi gratuito e istantaneo anche su molte buste paga.
+    """
+    mensilita = int(get_setting(db, "mensilita_annue", DEFAULT_MENSILITA))
+    records = db.query(models.Payslip).all()
+    updated = 0
+    for r in records:
+        new_ral = calculate_ral(r.elementi_retribuzione_totale, mensilita)
+        if new_ral != r.ral:
+            r.ral = new_ral
+            updated += 1
+    db.commit()
+    return {"updated": updated, "total": len(records), "mensilita": mensilita}
 
 
 @app.post("/api/chat", response_model=schemas.ChatResponse)

@@ -4,66 +4,114 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Tracker Buste Paga</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #0f1115;
-    --card: #171a21;
-    --border: #262b36;
-    --text: #e8eaed;
-    --muted: #9aa3af;
-    --accent: #6ea8fe;
+    --bg: #0b0d12;
+    --card: #151821;
+    --card-border: #242938;
+    --text: #eef0f4;
+    --muted: #8b93a5;
+    --accent: #7c9eff;
+    --accent-soft: rgba(124, 158, 255, 0.14);
     --green: #4ade80;
     --red: #f87171;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 10px;
+    --radius-pill: 999px;
+    --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.28);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);
+    background:
+      radial-gradient(circle at 15% 0%, rgba(124,158,255,0.06), transparent 40%),
+      radial-gradient(circle at 85% 10%, rgba(74,222,128,0.05), transparent 35%),
+      var(--bg);
     color: var(--text);
-    padding: 24px;
+    padding: 28px 20px 60px;
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 22px; margin-bottom: 4px; }
+  h1 { font-size: 23px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.01em; }
   .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
-  .grid { display: grid; grid-template-columns: 1fr; gap: 20px; max-width: 960px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 18px; max-width: 980px; margin: 0 auto; }
   @media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
   .card {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    box-shadow: var(--shadow-card);
   }
-  .card h2 { font-size: 16px; margin-top: 0; margin-bottom: 12px; }
+  .card h2 { font-size: 15.5px; font-weight: 600; margin-top: 0; margin-bottom: 14px; letter-spacing: -0.01em; }
   .full { grid-column: 1 / -1; }
+
   input[type=file] {
-    width: 100%; padding: 10px; background: #0f1115; border: 1px dashed var(--border);
-    border-radius: 8px; color: var(--text); margin-bottom: 12px;
+    width: 100%; padding: 12px 14px; background: #0d0f15; border: 1.5px dashed var(--card-border);
+    border-radius: var(--radius-md); color: var(--text); margin-bottom: 12px; font-size: 13.5px;
+    transition: border-color 0.15s ease;
   }
+  input[type=file]:hover { border-color: var(--accent); }
+
+  input[type=text], input:not([type]) {
+    padding: 11px 14px; border-radius: var(--radius-md); border: 1.5px solid var(--card-border);
+    background: #0d0f15; color: var(--text); font-size: 13.5px; transition: border-color 0.15s ease;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  select {
+    padding: 10px 14px; border-radius: var(--radius-md); border: 1.5px solid var(--card-border);
+    background: #0d0f15; color: var(--text); font-size: 13.5px;
+  }
+
   button {
-    background: var(--accent); color: #0f1115; border: none; border-radius: 8px;
-    padding: 10px 16px; font-weight: 600; cursor: pointer; font-size: 14px;
+    background: var(--accent); color: #0a0c11; border: none; border-radius: var(--radius-pill);
+    padding: 11px 18px; font-weight: 600; cursor: pointer; font-size: 13.5px;
+    transition: filter 0.15s ease, transform 0.1s ease;
   }
-  button:disabled { opacity: 0.5; cursor: default; }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.45; cursor: default; filter: none; }
+
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .table-wrap { overflow-x: auto; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { color: var(--muted); font-weight: 500; }
-  .pos { color: var(--green); }
-  .neg { color: var(--red); }
-  .status { font-size: 13px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-md); }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  tbody tr { transition: background 0.12s ease; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .pos { color: var(--green); font-weight: 600; }
+  .neg { color: var(--red); font-weight: 600; }
+  .status { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+
   #chatLog { max-height: 240px; overflow-y: auto; margin-bottom: 12px; font-size: 14px; }
-  .msg { margin-bottom: 10px; }
-  .msg .who { color: var(--muted); font-size: 11px; text-transform: uppercase; }
-  .chatRow { display: flex; gap: 8px; }
-  .chatRow input {
-    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
-    background: #0f1115; color: var(--text);
-  }
+  .msg { margin-bottom: 12px; padding: 10px 14px; background: #0d0f15; border-radius: var(--radius-md); }
+  .msg .who { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
+  .chatRow { display: flex; gap: 10px; }
+  .chatRow input { flex: 1; }
+
   .privacy-note {
-    font-size: 12px; color: var(--muted); border-left: 3px solid var(--accent);
-    padding-left: 10px; margin-top: 10px; line-height: 1.5;
+    font-size: 12px; color: var(--muted); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: var(--radius-md); margin-top: 12px; line-height: 1.5;
   }
+
+  /* Badge / chip components (categorie rimborsi) */
+  .cat-card {
+    background: #0d0f15; border: 1px solid var(--card-border); border-radius: var(--radius-md);
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .cat-badge {
+    display: inline-flex; align-items: center; padding: 5px 13px; border-radius: var(--radius-pill);
+    font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 4px 10px;
+    border-radius: var(--radius-pill); background: rgba(255,255,255,0.05); color: var(--muted);
+    border: 1px solid var(--card-border);
+  }
+  .chip .chip-icon { opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -104,8 +152,20 @@
 
   <div class="card">
     <h2>Andamento della RAL</h2>
-    <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Retribuzione Annua Lorda dichiarata in busta</div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
+      Calcolata come totale mensile "Elementi della retribuzione" × mensilità
+    </div>
     <canvas id="ralChart" height="140"></canvas>
+    <div style="border-top:1px solid var(--card-border); margin-top:14px; padding-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <label style="font-size:13px; color:var(--muted);">Mensilità annue:</label>
+      <select id="mensilitaSelect">
+        <option value="12">12</option>
+        <option value="13">13 (standard)</option>
+        <option value="14">14</option>
+      </select>
+      <button id="recomputeRalBtn" style="font-size:13px; padding:8px 12px;">Ricalcola RAL</button>
+    </div>
+    <div class="status" id="ralSettingsStatus"></div>
   </div>
 
   <div class="card full">
@@ -132,15 +192,12 @@
     </div>
     <div id="categoryList" style="margin-bottom:16px;"></div>
 
-    <div style="border-top:1px solid var(--border); padding-top:14px;">
-      <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Aggiungi categoria</div>
-      <div style="display:grid; grid-template-columns:1fr; gap:8px;">
-        <input id="catName" placeholder="Nome categoria (es. Buoni pasto)"
-          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
-        <input id="catCodes" placeholder="Codici voce, separati da virgola (opzionale, es. 000512)"
-          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
-        <input id="catKeywords" placeholder="Parole chiave, separate da virgola (es. buono pasto, ticket)"
-          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
+    <div style="border-top:1px solid var(--card-border); padding-top:16px;">
+      <div style="font-size:12.5px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.03em; font-weight:600;">Aggiungi categoria</div>
+      <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+        <input id="catName" placeholder="Nome categoria (es. Buoni pasto)" />
+        <input id="catCodes" placeholder="Codici voce, separati da virgola (opzionale, es. 000512)" />
+        <input id="catKeywords" placeholder="Parole chiave, separate da virgola (es. buono pasto, ticket)" />
         <button id="addCatBtn" style="width:fit-content;">Aggiungi categoria</button>
         <div class="status" id="catStatus"></div>
       </div>
@@ -186,11 +243,12 @@ async function refreshAll() {
     api("/stats/trend"),
     api("/stats/raises"),
     api("/reimbursement-categories"),
+    api("/settings/mensilita"),
   ]);
 
-  const [payslipsR, trendR, raisesR, categoriesR] = results;
+  const [payslipsR, trendR, raisesR, categoriesR, mensilitaR] = results;
   const errors = results
-    .map((r, i) => (r.status === "rejected" ? ["buste paga", "andamento", "aumenti", "categorie rimborsi"][i] + ": " + r.reason.message : null))
+    .map((r, i) => (r.status === "rejected" ? ["buste paga", "andamento", "aumenti", "categorie rimborsi", "mensilità"][i] + ": " + r.reason.message : null))
     .filter(Boolean);
 
   const errorBox = document.getElementById("globalError");
@@ -205,6 +263,11 @@ async function refreshAll() {
   const trend = trendR.status === "fulfilled" ? trendR.value : [];
   const raises = raisesR.status === "fulfilled" ? raisesR.value : [];
   const categories = categoriesR.status === "fulfilled" ? categoriesR.value : [];
+  const mensilita = mensilitaR.status === "fulfilled" ? mensilitaR.value.mensilita : null;
+
+  if (mensilita) {
+    document.getElementById("mensilitaSelect").value = String(mensilita);
+  }
 
   renderSummary(payslips);
   renderTable(payslips, raises);
@@ -243,24 +306,26 @@ function renderTable(payslips, raises) {
     const deltaHtml = delta === null || delta === undefined
       ? "—"
       : `<span class="${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '+' : ''}€ ${delta.toFixed(2)}</span>`;
-    const breakdownText = (p.reimbursements_breakdown || [])
-      .map(b => `${b.category}: €${b.amount.toFixed(2)}`)
-      .join(" — ");
-    const tooltipText = [breakdownText, p.notes].filter(Boolean).join(" | ");
-    const reimbNote = tooltipText ? ` <span title="${tooltipText.replace(/"/g, '&quot;')}" style="cursor:help;">ℹ️</span>` : "";
+    const breakdownDots = (p.reimbursements_breakdown || [])
+      .map(b => {
+        const color = colorForCategory(b.category);
+        return `<span title="${b.category}: €${b.amount.toFixed(2)}" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${color.fg}; margin-right:3px;"></span>`;
+      })
+      .join("");
+    const noteIcon = p.notes ? ` <span title="${p.notes.replace(/"/g, '&quot;')}" style="cursor:help;">ℹ️</span>` : "";
     const fmt = (v) => (v === null || v === undefined) ? "—" : `€ ${v.toFixed(2)}`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${MONTHS[p.month]} ${p.year}</td>
       <td>€ ${p.gross_pay.toFixed(2)}</td>
       <td>€ ${p.net_pay.toFixed(2)}</td>
-      <td>€ ${p.reimbursements.toFixed(2)}${reimbNote}</td>
+      <td>€ ${p.reimbursements.toFixed(2)} ${breakdownDots}${noteIcon}</td>
       <td>${deltaHtml}</td>
       <td>${fmt(p.ral)}</td>
       <td>${fmt(p.base_pay)}</td>
       <td>${fmt(p.contingenza)}</td>
       <td>${fmt(p.scatti)}</td>
-      <td><button data-id="${p.id}" class="delBtn" style="background:#262b36;color:#f87171;">✕</button></td>
+      <td><button data-id="${p.id}" class="delBtn" style="background:rgba(248,113,113,0.12);color:#f87171;">✕</button></td>
     `;
     body.appendChild(tr);
   });
@@ -282,17 +347,17 @@ function renderChart(trend) {
       labels,
       datasets: [
         { label: "Netto", data: trend.map(t => t.net_pay), borderColor: "#4ade80", tension: 0.3 },
-        { label: "Lordo", data: trend.map(t => t.gross_pay), borderColor: "#6ea8fe", tension: 0.3 },
+        { label: "Lordo", data: trend.map(t => t.gross_pay), borderColor: "#7c9eff", tension: 0.3 },
         { label: "Rimborsi", data: trend.map(t => t.reimbursements), borderColor: "#facc15", tension: 0.3 },
       ],
     },
     options: {
       responsive: true,
       scales: {
-        x: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
-        y: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
+        x: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
+        y: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
       },
-      plugins: { legend: { labels: { color: "#e8eaed" } } },
+      plugins: { legend: { labels: { color: "#eef0f4" } } },
     },
   });
 }
@@ -312,8 +377,8 @@ function renderNetChart(trend) {
     options: {
       responsive: true,
       scales: {
-        x: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
-        y: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
+        x: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
+        y: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
       },
       plugins: { legend: { display: false } },
     },
@@ -351,13 +416,33 @@ function renderRalChart(trend) {
     options: {
       responsive: true,
       scales: {
-        x: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
-        y: { ticks: { color: "#9aa3af" }, grid: { color: "#262b36" } },
+        x: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
+        y: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
       },
       plugins: { legend: { display: false } },
     },
   });
 }
+
+document.getElementById("recomputeRalBtn").addEventListener("click", async () => {
+  const select = document.getElementById("mensilitaSelect");
+  const status = document.getElementById("ralSettingsStatus");
+  const mensilita = parseInt(select.value, 10);
+
+  status.textContent = "Salvataggio e ricalcolo…";
+  try {
+    await api("/settings/mensilita", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mensilita }),
+    });
+    const result = await api("/recompute-ral", { method: "POST" });
+    status.textContent = `✅ RAL ricalcolata su ${result.updated}/${result.total} buste paga (${mensilita} mensilità). Nessun costo API: calcolo locale.`;
+    refreshAll();
+  } catch (e) {
+    status.textContent = "❌ " + e.message;
+  }
+});
 
 document.getElementById("uploadBtn").addEventListener("click", async () => {
   const input = document.getElementById("fileInput");
@@ -402,27 +487,47 @@ document.getElementById("uploadBtn").addEventListener("click", async () => {
   refreshAll();
 });
 
+// Palette di colori per i badge delle categorie: assegnazione deterministica
+// in base al nome, così ogni categoria mantiene sempre lo stesso colore.
+const BADGE_COLORS = [
+  { bg: "rgba(124,158,255,0.16)", fg: "#8fb0ff" },  // blu
+  { bg: "rgba(74,222,128,0.16)",  fg: "#5eeaa0" },  // verde
+  { bg: "rgba(250,204,21,0.16)",  fg: "#fcd34d" },  // giallo
+  { bg: "rgba(244,114,182,0.16)", fg: "#f7a8cd" },  // rosa
+  { bg: "rgba(248,113,113,0.16)", fg: "#fca5a5" },  // rosso
+  { bg: "rgba(45,212,191,0.16)",  fg: "#5eead4" },  // teal
+  { bg: "rgba(167,139,250,0.16)", fg: "#c4b5fd" },  // viola
+  { bg: "rgba(251,146,60,0.16)",  fg: "#fdba74" },  // arancio
+];
+
+function colorForCategory(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return BADGE_COLORS[Math.abs(hash) % BADGE_COLORS.length];
+}
+
 function renderCategories(categories) {
   const el = document.getElementById("categoryList");
   if (!categories.length) {
-    el.innerHTML = `<div style="color:var(--muted); font-size:13px;">Nessuna categoria configurata.</div>`;
+    el.innerHTML = `<div style="color:var(--muted); font-size:13px;">Nessuna categoria configurata ancora — aggiungine una qui sotto.</div>`;
     return;
   }
   el.innerHTML = "";
   categories.forEach(c => {
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); gap:10px;";
-    const codes = (c.codes || []).join(", ") || "—";
-    const keywords = (c.keywords || []).join(", ") || "—";
-    row.innerHTML = `
-      <div>
-        <div style="font-weight:600;">${c.name}</div>
-        <div style="font-size:12px; color:var(--muted); margin-top:2px;">Codici: ${codes}</div>
-        <div style="font-size:12px; color:var(--muted);">Parole chiave: ${keywords}</div>
+    const color = colorForCategory(c.name);
+    const codeChips = (c.codes || []).map(code => `<span class="chip"><span class="chip-icon">#</span>${code}</span>`).join("");
+    const keywordChips = (c.keywords || []).map(kw => `<span class="chip"><span class="chip-icon">🔑</span>${kw}</span>`).join("");
+
+    const card = document.createElement("div");
+    card.className = "cat-card";
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;">
+        <span class="cat-badge" style="background:${color.bg}; color:${color.fg};">${c.name}</span>
+        <button data-id="${c.id}" class="delCatBtn" style="background:rgba(248,113,113,0.12); color:#f87171; flex-shrink:0; padding:6px 12px; font-size:12px;">✕</button>
       </div>
-      <button data-id="${c.id}" class="delCatBtn" style="background:#262b36; color:#f87171; flex-shrink:0;">✕</button>
+      <div class="chip-row">${codeChips}${keywordChips || (!codeChips ? '<span class="chip">Nessuna regola</span>' : '')}</div>
     `;
-    el.appendChild(row);
+    el.appendChild(card);
   });
   document.querySelectorAll(".delCatBtn").forEach(btn => {
     btn.addEventListener("click", async () => {

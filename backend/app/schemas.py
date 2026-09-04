@@ -23,6 +23,8 @@ class PayslipOut(BaseModel):
     base_pay: Optional[float] = None
     contingenza: Optional[float] = None
     scatti: Optional[float] = None
+    elementi_retribuzione: Optional[List[Dict[str, Any]]] = None
+    elementi_retribuzione_totale: Optional[float] = None
     earnings_detail: Optional[List[Dict[str, Any]]] = None
     deductions_detail: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
@@ -30,6 +32,14 @@ class PayslipOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MensilitaIn(BaseModel):
+    mensilita: int
+
+
+class MensilitaOut(BaseModel):
+    mensilita: int
 
 
 class ReimbursementCategoryIn(BaseModel):
