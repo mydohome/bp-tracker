@@ -1,7 +1,8 @@
 import os
 import json
 import re
-from anthropic import Anthropic
+import time
+from anthropic import Anthropic, APIError, RateLimitError, APIConnectionError
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 
@@ -71,19 +72,74 @@ def _strip_json_fences(text: str) -> str:
     return text
 
 
-def extract_payslip_data(anonymized_text: str) -> dict:
+def _extract_json_object(text: str) -> str:
+    """
+    Isola l'oggetto JSON dal testo di risposta, anche se il modello ha
+    aggiunto del testo prima/dopo (es. "Ecco i dati:" oppure una nota finale).
+    Prende tutto ciò che va dalla prima '{' all'ultima '}' nel testo.
+    """
+    cleaned = _strip_json_fences(text)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("Nessun oggetto JSON individuabile nella risposta del modello.")
+    return cleaned[start : end + 1]
+
+
+def _call_and_parse(anonymized_text: str, max_tokens: int) -> tuple[dict, str]:
     client = get_client()
     response = client.messages.create(
         model=MODEL,
-        max_tokens=2000,
+        max_tokens=max_tokens,
         system=EXTRACTION_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": anonymized_text}],
     )
     text = "".join(
         block.text for block in response.content if getattr(block, "type", None) == "text"
     )
-    cleaned = _strip_json_fences(text)
-    return json.loads(cleaned)
+    if not text.strip():
+        raise ValueError("Il modello ha restituito una risposta vuota.")
+
+    json_str = _extract_json_object(text)
+    data = json.loads(json_str)  # può sollevare json.JSONDecodeError
+    return data, response.stop_reason
+
+
+def extract_payslip_data(anonymized_text: str) -> dict:
+    """
+    Estrae i dati strutturati dalla busta paga, con tentativi automatici in
+    caso di risposta troncata, JSON malformato o risposta vuota (transitori,
+    capitano occasionalmente con le chiamate API).
+    """
+    last_error = None
+    max_tokens = 2000
+
+    for attempt in range(3):
+        try:
+            data, stop_reason = _call_and_parse(anonymized_text, max_tokens)
+            if stop_reason == "max_tokens":
+                # La risposta è stata tagliata: probabile JSON incompleto.
+                # Riprova con un budget di token più alto.
+                max_tokens = min(max_tokens * 2, 8000)
+                last_error = ValueError("Risposta troncata per limite di token, riprovo con più spazio.")
+                continue
+            return data
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = e
+            max_tokens = min(max_tokens * 2, 8000)
+            continue
+        except RateLimitError as e:
+            last_error = e
+            time.sleep(2 * (attempt + 1))  # backoff progressivo: 2s, 4s, 6s
+            continue
+        except (APIConnectionError, APIError) as e:
+            last_error = e
+            time.sleep(1 * (attempt + 1))
+            continue
+
+    raise RuntimeError(
+        f"Impossibile interpretare la risposta del modello dopo {attempt + 1} tentativi: {last_error}"
+    )
 
 
 CHAT_SYSTEM_PROMPT = """Sei un assistente che aiuta l'utente ad analizzare lo storico
