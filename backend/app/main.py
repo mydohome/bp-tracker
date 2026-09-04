@@ -219,6 +219,44 @@ def trend(db: Session = Depends(get_db)):
     ]
 
 
+@app.get("/api/stats/ral-by-year", response_model=List[schemas.RalYearPoint])
+def ral_by_year(db: Session = Depends(get_db)):
+    """
+    RAL rappresentativa per ciascun anno, per il confronto anno su anno.
+    Usa il valore dell'ultimo mese diverso da dicembre quando disponibile:
+    se la tredicesima viene caricata insieme al cedolino di dicembre, quel
+    mese può riportare nel riquadro "Elementi della retribuzione" un totale
+    raddoppiato, che distorcerebbe il calcolo della RAL se usato come
+    riferimento. Se per un anno è disponibile solo dicembre, usa comunque
+    quel valore (meglio di niente).
+    """
+    records = (
+        db.query(models.Payslip)
+        .filter(models.Payslip.ral.isnot(None))
+        .order_by(models.Payslip.year.asc(), models.Payslip.month.asc())
+        .all()
+    )
+
+    by_year: dict[int, dict[int, float]] = {}
+    for r in records:
+        by_year.setdefault(r.year, {})[r.month] = r.ral
+
+    result = []
+    for year in sorted(by_year.keys()):
+        months = by_year[year]
+        non_december = {m: v for m, v in months.items() if m != 12}
+        if non_december:
+            source_month = max(non_december.keys())
+            ral_value = non_december[source_month]
+        else:
+            source_month = max(months.keys())
+            ral_value = months[source_month]
+        result.append(
+            schemas.RalYearPoint(year=year, ral=ral_value, source_month=source_month)
+        )
+    return result
+
+
 @app.get("/api/stats/raises")
 def raises(db: Session = Depends(get_db)):
     """Confronta ogni mese col mese precedente per evidenziare eventuali aumenti."""

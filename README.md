@@ -156,8 +156,10 @@ Il backend è raggiungibile anche direttamente su `http://localhost:8000`
   premere "Ricalcola RAL" per aggiornare retroattivamente tutte le buste
   paga già caricate **senza consumare token API**.
 - Tre grafici: andamento combinato lordo/netto/rimborsi, andamento del solo
-  netto, andamento della RAL nel tempo (a gradini, perché resta costante fino
-  al prossimo aumento).
+  netto, **confronto della RAL tra anni** (grafico a barre, un valore per
+  anno — esclude dicembre quando c'è un mese alternativo disponibile, per
+  evitare che il totale raddoppiato dalla tredicesima nello stesso cedolino
+  distorca il confronto).
 - Il grafico mostra l'andamento di lordo, netto e rimborsi nel tempo.
 - La tabella mostra la variazione (Δ) del netto rispetto al mese precedente,
   utile per individuare aumenti o tagli.
@@ -175,6 +177,16 @@ Il backend è raggiungibile anche direttamente su `http://localhost:8000`
   - "Qual è stato il mese con il netto più alto?"
   - "Quanto ho ricevuto di rimborsi nell'ultimo anno?"
   - "C'è stato un aumento della RAL negli ultimi 12 mesi?"
+
+## Affidabilità dell'estrazione (tabelle del PDF)
+
+Oltre al testo semplice, l'app estrae anche le tabelle del cedolino in
+forma esplicita riga/colonna (con due strategie: rilevamento basato su
+linee di tabella e, come fallback, sull'allineamento del testo). Questo
+riduce il rischio che un'etichetta come "Rimborso spese" venga associata
+all'importo sbagliato (o non collegata affatto) quando il testo semplice
+del PDF "appiattisce" colonne diverse in un'unica riga poco chiara — un
+problema comune con cedolini multi-colonna come quelli Zucchetti.
 
 ## Backup dei dati
 

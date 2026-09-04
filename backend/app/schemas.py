@@ -64,6 +64,12 @@ class TrendPoint(BaseModel):
     ral: Optional[float] = None
 
 
+class RalYearPoint(BaseModel):
+    year: int
+    ral: float
+    source_month: int  # mese usato come rappresentativo per quell'anno
+
+
 class ChatRequest(BaseModel):
     question: str
 

@@ -26,6 +26,14 @@ EXTRACTION_SYSTEM_PROMPT = """Sei un motore di estrazione dati per buste paga it
 Ricevi il testo (già anonimizzato: nome, codice fiscale, indirizzo e IBAN sono
 già stati rimossi) di UNA busta paga.
 
+Il testo può contenere blocchi delimitati da [TABELLA] ... [/TABELLA]: sono
+tabelle estratte in forma esplicita, una riga per riga, con le celle
+separate da " | " (es. "000472 | Rimborso spese | | | 1.071,68"). Quando
+presenti, usa SEMPRE questi blocchi come fonte primaria per associare
+correttamente ogni voce al suo importo — sono più affidabili del testo
+libero circostante, che a volte perde l'allineamento tra colonne (etichetta,
+importo base, riferimento, trattenute, competenze).
+
 Leggi TUTTO il testo con attenzione, incluse le righe in fondo al cedolino,
 le voci accessorie e le eventuali sezioni "dati per il conguaglio", "elementi
 non ricorrenti", "trasferte", "note spese": spesso i rimborsi sono elencati

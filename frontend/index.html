@@ -151,9 +151,9 @@
   </div>
 
   <div class="card">
-    <h2>Andamento della RAL</h2>
+    <h2>Confronto RAL tra anni</h2>
     <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
-      Calcolata come totale mensile "Elementi della retribuzione" × mensilità
+      RAL = totale mensile "Elementi della retribuzione" × mensilità, per anno (esclude dicembre quando c'è un mese alternativo, per via della tredicesima caricata nello stesso cedolino)
     </div>
     <canvas id="ralChart" height="140"></canvas>
     <div style="border-top:1px solid var(--card-border); margin-top:14px; padding-top:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -244,11 +244,12 @@ async function refreshAll() {
     api("/stats/raises"),
     api("/reimbursement-categories"),
     api("/settings/mensilita"),
+    api("/stats/ral-by-year"),
   ]);
 
-  const [payslipsR, trendR, raisesR, categoriesR, mensilitaR] = results;
+  const [payslipsR, trendR, raisesR, categoriesR, mensilitaR, ralByYearR] = results;
   const errors = results
-    .map((r, i) => (r.status === "rejected" ? ["buste paga", "andamento", "aumenti", "categorie rimborsi", "mensilità"][i] + ": " + r.reason.message : null))
+    .map((r, i) => (r.status === "rejected" ? ["buste paga", "andamento", "aumenti", "categorie rimborsi", "mensilità", "RAL per anno"][i] + ": " + r.reason.message : null))
     .filter(Boolean);
 
   const errorBox = document.getElementById("globalError");
@@ -264,6 +265,7 @@ async function refreshAll() {
   const raises = raisesR.status === "fulfilled" ? raisesR.value : [];
   const categories = categoriesR.status === "fulfilled" ? categoriesR.value : [];
   const mensilita = mensilitaR.status === "fulfilled" ? mensilitaR.value.mensilita : null;
+  const ralByYear = ralByYearR.status === "fulfilled" ? ralByYearR.value : [];
 
   if (mensilita) {
     document.getElementById("mensilitaSelect").value = String(mensilita);
@@ -273,7 +275,7 @@ async function refreshAll() {
   renderTable(payslips, raises);
   renderChart(trend);
   renderNetChart(trend);
-  renderRalChart(trend);
+  renderRalChart(ralByYear);
   renderCategories(categories);
 }
 
@@ -385,13 +387,12 @@ function renderNetChart(trend) {
   });
 }
 
-function renderRalChart(trend) {
-  const ralPoints = trend.filter(t => t.ral !== null && t.ral !== undefined);
-  const labels = ralPoints.map(t => `${MONTHS[t.month]} ${t.year}`);
+function renderRalChart(ralByYear) {
+  const labels = ralByYear.map(p => String(p.year));
   const ctx = document.getElementById("ralChart").getContext("2d");
   if (ralChartInstance) ralChartInstance.destroy();
 
-  if (!ralPoints.length) {
+  if (!ralByYear.length) {
     ctx.canvas.parentElement.querySelector(".ral-empty")?.remove();
     const msg = document.createElement("div");
     msg.className = "ral-empty";
@@ -403,23 +404,32 @@ function renderRalChart(trend) {
   ctx.canvas.parentElement.querySelector(".ral-empty")?.remove();
 
   ralChartInstance = new Chart(ctx, {
-    type: "line",
+    type: "bar",
     data: {
       labels,
       datasets: [
-        // "stepped: true" perché la RAL resta costante per mesi e poi
-        // scatta di colpo quando c'è un aumento: una linea a gradini
-        // rende il salto più leggibile di un'interpolazione morbida.
-        { label: "RAL", data: ralPoints.map(t => t.ral), borderColor: "#f472b6", backgroundColor: "rgba(244,114,182,0.1)", fill: true, stepped: true },
+        {
+          label: "RAL",
+          data: ralByYear.map(p => p.ral),
+          backgroundColor: "rgba(244,114,182,0.55)",
+          borderRadius: 8,
+        },
       ],
     },
     options: {
       responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterLabel: (item) => `(riferimento: ${MONTHS[ralByYear[item.dataIndex].source_month]})`,
+          },
+        },
+      },
       scales: {
-        x: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
+        x: { ticks: { color: "#8b93a5" }, grid: { display: false } },
         y: { ticks: { color: "#8b93a5" }, grid: { color: "#242938" } },
       },
-      plugins: { legend: { display: false } },
     },
   });
 }
