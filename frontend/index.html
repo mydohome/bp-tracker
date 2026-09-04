@@ -325,13 +325,25 @@ function renderSummary(payslips) {
     return;
   }
   const totalReimb = payslips.reduce((s, p) => s + (p.reimbursements || 0), 0);
-  const avgNet = payslips.reduce((s, p) => s + p.net_pay, 0) / payslips.length;
   const last = payslips[0];
+
+  // Media netto mensile per singolo anno (una tile per anno presente).
+  const byYear = {};
+  payslips.forEach(p => {
+    (byYear[p.year] = byYear[p.year] || []).push(p.net_pay);
+  });
+  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a); // più recente prima
+  const yearPalette = ["var(--lilac-soft)", "var(--teal-soft)", "var(--accent-soft)", "var(--green-soft)", "var(--amber-soft)"];
+  const yearTiles = years.map((y, i) => {
+    const values = byYear[y];
+    const avg = values.reduce((s, v) => s + v, 0) / values.length;
+    return { icon: "📊", label: `Media netto ${y} (${values.length} mesi)`, value: `€ ${avg.toFixed(2)}`, bg: yearPalette[i % yearPalette.length] };
+  });
 
   const tiles = [
     { icon: "📄", label: "Buste caricate", value: String(payslips.length), bg: "var(--accent-soft)" },
     { icon: "💶", label: `Ultimo netto (${MONTHS[last.month]} ${last.year})`, value: `€ ${last.net_pay.toFixed(2)}`, bg: "var(--green-soft)" },
-    { icon: "📊", label: "Media netto complessiva", value: `€ ${avgNet.toFixed(2)}`, bg: "var(--lilac-soft)" },
+    ...yearTiles,
     { icon: "💰", label: "Totale rimborsi", value: `€ ${totalReimb.toFixed(2)}`, bg: "var(--amber-soft)" },
   ];
   if (last.ral) {
