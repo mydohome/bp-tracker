@@ -38,6 +38,9 @@ Cerca ESPLICITAMENTE voci che indicano un rimborso, anche parziale, tra cui
 - "rimborso chilometrico", "rimborso km", "indennità chilometrica"
 - "rimborso pasti", "buoni pasto" solo se pagati in busta come importo (non il valore del ticket)
 - "anticipo spese", "rimborso spese sostenute"
+- "rimborsi da 730", "conguaglio 730", "conguaglio fiscale" (il rimborso IRPEF
+  derivante dalla dichiarazione dei redditi, erogato tramite busta paga: va
+  trattato come rimborso, non come componente ordinaria dello stipendio)
 
 Ogni voce di questo tipo trovata nel documento va:
 1) inclusa in "earnings_detail" con la sua etichetta originale e il suo importo;

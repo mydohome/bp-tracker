@@ -17,6 +17,7 @@ class PayslipOut(BaseModel):
     net_pay: float
     net_pay_stated: Optional[float] = None
     reimbursements: float
+    reimbursements_breakdown: Optional[List[Dict[str, Any]]] = None
     total_deductions: float
     ral: Optional[float] = None
     base_pay: Optional[float] = None
@@ -26,6 +27,19 @@ class PayslipOut(BaseModel):
     deductions_detail: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
     uploaded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReimbursementCategoryIn(BaseModel):
+    name: str
+    codes: Optional[List[str]] = []
+    keywords: Optional[List[str]] = []
+
+
+class ReimbursementCategoryOut(ReimbursementCategoryIn):
+    id: int
 
     class Config:
         from_attributes = True

@@ -126,6 +126,16 @@ Il backend è raggiungibile anche direttamente su `http://localhost:8000`
 - Il grafico mostra l'andamento di lordo, netto e rimborsi nel tempo.
 - La tabella mostra la variazione (Δ) del netto rispetto al mese precedente,
   utile per individuare aumenti o tagli.
+- **Categorie di rimborso configurabili**: nella card "⚙️ Categorie rimborsi"
+  puoi vedere, aggiungere e rimuovere categorie (es. "Rimborsi da 730",
+  "Rimborso spese", o categorie tue come "Buoni pasto"). Ogni categoria è
+  definita da codici voce (es. "F00880") e/o parole chiave (es. "rimborso
+  spese"): ogni riga del cedolino viene confrontata con queste regole e
+  sommata nella categoria corrispondente. Le voci che sembrano un rimborso
+  ma non corrispondono a nessuna categoria configurata finiscono in "Altri
+  rimborsi", così nessun importo passa inosservato. Il dettaglio per
+  categoria è visibile passando il mouse sull'icona ℹ️ nella colonna
+  Rimborsi della tabella storica.
 - Nel box chat puoi chiedere cose come:
   - "Qual è stato il mese con il netto più alto?"
   - "Quanto ho ricevuto di rimborsi nell'ultimo anno?"

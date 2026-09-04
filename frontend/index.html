@@ -123,6 +123,30 @@
   </div>
 
   <div class="card full">
+    <h2>⚙️ Categorie rimborsi</h2>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+      Ogni voce del cedolino viene assegnata a una categoria in base al codice voce
+      e/o a parole chiave contenute nell'etichetta. Le voci non riconosciute finiscono
+      in "Altri rimborsi".
+    </div>
+    <div id="categoryList" style="margin-bottom:16px;"></div>
+
+    <div style="border-top:1px solid var(--border); padding-top:14px;">
+      <div style="font-size:13px; color:var(--muted); margin-bottom:8px;">Aggiungi categoria</div>
+      <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+        <input id="catName" placeholder="Nome categoria (es. Buoni pasto)"
+          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
+        <input id="catCodes" placeholder="Codici voce, separati da virgola (opzionale, es. 000512)"
+          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
+        <input id="catKeywords" placeholder="Parole chiave, separate da virgola (es. buono pasto, ticket)"
+          style="padding:10px; border-radius:8px; border:1px solid var(--border); background:#0f1115; color:var(--text);" />
+        <button id="addCatBtn" style="width:fit-content;">Aggiungi categoria</button>
+        <div class="status" id="catStatus"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card full">
     <h2>💬 Chiedi a Claude sui tuoi dati</h2>
     <div id="chatLog"></div>
     <div class="chatRow">
@@ -152,16 +176,18 @@ async function api(path, opts) {
 }
 
 async function refreshAll() {
-  const [payslips, trend, raises] = await Promise.all([
+  const [payslips, trend, raises, categories] = await Promise.all([
     api("/payslips"),
     api("/stats/trend"),
     api("/stats/raises"),
+    api("/reimbursement-categories"),
   ]);
   renderSummary(payslips);
   renderTable(payslips, raises);
   renderChart(trend);
   renderNetChart(trend);
   renderRalChart(trend);
+  renderCategories(categories);
 }
 
 function renderSummary(payslips) {
@@ -193,7 +219,11 @@ function renderTable(payslips, raises) {
     const deltaHtml = delta === null || delta === undefined
       ? "—"
       : `<span class="${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '+' : ''}€ ${delta.toFixed(2)}</span>`;
-    const reimbNote = p.notes ? ` <span title="${p.notes.replace(/"/g, '&quot;')}" style="cursor:help;">ℹ️</span>` : "";
+    const breakdownText = (p.reimbursements_breakdown || [])
+      .map(b => `${b.category}: €${b.amount.toFixed(2)}`)
+      .join(" — ");
+    const tooltipText = [breakdownText, p.notes].filter(Boolean).join(" | ");
+    const reimbNote = tooltipText ? ` <span title="${tooltipText.replace(/"/g, '&quot;')}" style="cursor:help;">ℹ️</span>` : "";
     const fmt = (v) => (v === null || v === undefined) ? "—" : `€ ${v.toFixed(2)}`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -346,6 +376,67 @@ document.getElementById("uploadBtn").addEventListener("click", async () => {
   input.value = "";
   document.getElementById("uploadBtn").disabled = false;
   refreshAll();
+});
+
+function renderCategories(categories) {
+  const el = document.getElementById("categoryList");
+  if (!categories.length) {
+    el.innerHTML = `<div style="color:var(--muted); font-size:13px;">Nessuna categoria configurata.</div>`;
+    return;
+  }
+  el.innerHTML = "";
+  categories.forEach(c => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); gap:10px;";
+    const codes = (c.codes || []).join(", ") || "—";
+    const keywords = (c.keywords || []).join(", ") || "—";
+    row.innerHTML = `
+      <div>
+        <div style="font-weight:600;">${c.name}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:2px;">Codici: ${codes}</div>
+        <div style="font-size:12px; color:var(--muted);">Parole chiave: ${keywords}</div>
+      </div>
+      <button data-id="${c.id}" class="delCatBtn" style="background:#262b36; color:#f87171; flex-shrink:0;">✕</button>
+    `;
+    el.appendChild(row);
+  });
+  document.querySelectorAll(".delCatBtn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await api(`/reimbursement-categories/${btn.dataset.id}`, { method: "DELETE" });
+      refreshAll();
+    });
+  });
+}
+
+document.getElementById("addCatBtn").addEventListener("click", async () => {
+  const nameEl = document.getElementById("catName");
+  const codesEl = document.getElementById("catCodes");
+  const keywordsEl = document.getElementById("catKeywords");
+  const status = document.getElementById("catStatus");
+
+  const name = nameEl.value.trim();
+  const codes = codesEl.value.split(",").map(s => s.trim()).filter(Boolean);
+  const keywords = keywordsEl.value.split(",").map(s => s.trim()).filter(Boolean);
+
+  if (!name) { status.textContent = "Inserisci un nome per la categoria."; return; }
+  if (!codes.length && !keywords.length) {
+    status.textContent = "Inserisci almeno un codice voce o una parola chiave.";
+    return;
+  }
+
+  status.textContent = "Salvataggio…";
+  try {
+    await api("/reimbursement-categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, codes, keywords }),
+    });
+    nameEl.value = ""; codesEl.value = ""; keywordsEl.value = "";
+    status.textContent = "✅ Categoria aggiunta.";
+    refreshAll();
+  } catch (e) {
+    status.textContent = "❌ " + e.message;
+  }
 });
 
 document.getElementById("chatBtn").addEventListener("click", async () => {

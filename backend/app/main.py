@@ -5,7 +5,7 @@ from sqlalchemy import extract
 from typing import List
 
 from . import models, schemas
-from .database import engine, get_db, Base
+from .database import engine, get_db, Base, SessionLocal
 from .pdf_extract import extract_text_from_pdf
 from .anonymizer import anonymize_text
 from .claude_client import extract_payslip_data, ask_about_payslips
@@ -14,6 +14,37 @@ from .migrations import run_migrations
 
 Base.metadata.create_all(bind=engine)
 run_migrations(engine)
+
+
+def seed_default_reimbursement_categories():
+    """
+    Alla prima esecuzione, pre-carica le categorie di rimborso più comuni.
+    L'utente può poi modificarle/aggiungerne altre dalle impostazioni.
+    Non fa nulla se esistono già categorie (non sovrascrive personalizzazioni).
+    """
+    db = SessionLocal()
+    try:
+        if db.query(models.ReimbursementCategory).count() > 0:
+            return
+        defaults = [
+            models.ReimbursementCategory(
+                name="Rimborsi da 730",
+                codes=["F00880"],
+                keywords=["rimborsi da 730", "conguaglio 730", "conguaglio fiscale"],
+            ),
+            models.ReimbursementCategory(
+                name="Rimborso spese",
+                codes=["000472"],
+                keywords=["rimborso spese", "rimb. spese", "note spese", "nota spese", "anticipo spese"],
+            ),
+        ]
+        db.add_all(defaults)
+        db.commit()
+    finally:
+        db.close()
+
+
+seed_default_reimbursement_categories()
 
 app = FastAPI(title="Payslip Tracker")
 
@@ -74,8 +105,9 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
         db.add(record)
 
     earnings_detail = data.get("earnings_detail") or []
-    reimbursements, reconciliation_note = reconcile_reimbursements(
-        float(data.get("reimbursements") or 0), earnings_detail
+    categories = db.query(models.ReimbursementCategory).all()
+    reimbursements, reimbursements_breakdown, reconciliation_note = reconcile_reimbursements(
+        float(data.get("reimbursements") or 0), earnings_detail, categories
     )
 
     # Il modello estrae il netto ESATTAMENTE come riportato sul cedolino
@@ -90,6 +122,7 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
     record.net_pay = net_pay_salary
     record.net_pay_stated = net_pay_stated
     record.reimbursements = reimbursements
+    record.reimbursements_breakdown = reimbursements_breakdown
     record.total_deductions = float(data.get("total_deductions") or 0)
     record.ral = float(data["ral"]) if data.get("ral") not in (None, "") else None
     record.base_pay = float(data.get("base_pay") or 0)
@@ -179,6 +212,57 @@ def raises(db: Session = Depends(get_db)):
         )
         prev = r
     return result
+
+
+# --- Categorie di rimborso (configurabili dall'utente) ---
+
+@app.get("/api/reimbursement-categories", response_model=List[schemas.ReimbursementCategoryOut])
+def list_reimbursement_categories(db: Session = Depends(get_db)):
+    return (
+        db.query(models.ReimbursementCategory)
+        .order_by(models.ReimbursementCategory.name.asc())
+        .all()
+    )
+
+
+@app.post("/api/reimbursement-categories", response_model=schemas.ReimbursementCategoryOut)
+def create_reimbursement_category(
+    payload: schemas.ReimbursementCategoryIn, db: Session = Depends(get_db)
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(400, "Il nome della categoria non può essere vuoto.")
+
+    existing = (
+        db.query(models.ReimbursementCategory)
+        .filter(models.ReimbursementCategory.name == name)
+        .first()
+    )
+    if existing:
+        raise HTTPException(409, "Esiste già una categoria con questo nome.")
+
+    codes = [c.strip() for c in (payload.codes or []) if c.strip()]
+    keywords = [k.strip() for k in (payload.keywords or []) if k.strip()]
+    if not codes and not keywords:
+        raise HTTPException(
+            400, "Specifica almeno un codice voce o una parola chiave per la categoria."
+        )
+
+    category = models.ReimbursementCategory(name=name, codes=codes, keywords=keywords)
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+@app.delete("/api/reimbursement-categories/{category_id}")
+def delete_reimbursement_category(category_id: int, db: Session = Depends(get_db)):
+    category = db.get(models.ReimbursementCategory, category_id)
+    if not category:
+        raise HTTPException(404, "Categoria non trovata.")
+    db.delete(category)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @app.post("/api/chat", response_model=schemas.ChatResponse)

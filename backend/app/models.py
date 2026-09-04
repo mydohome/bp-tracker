@@ -29,7 +29,8 @@ class Payslip(Base):
     net_pay = Column(Float, nullable=False, default=0)
     net_pay_stated = Column(Float, nullable=True)
 
-    reimbursements = Column(Float, nullable=False, default=0) # rimborsi spese
+    reimbursements = Column(Float, nullable=False, default=0) # rimborsi spese (totale)
+    reimbursements_breakdown = Column(JSON, nullable=True)    # [{"category": nome, "amount": float}, ...]
     total_deductions = Column(Float, nullable=False, default=0)  # trattenute/contributi/IRPEF
 
     # RAL (Retribuzione Annua Lorda) indicata nel cedolino (di solito in alto/intestazione).
@@ -46,3 +47,20 @@ class Payslip(Base):
 
     notes = Column(String, nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReimbursementCategory(Base):
+    """
+    Categoria di rimborso configurabile dall'utente (es. "Rimborsi da 730",
+    "Rimborso spese"). Ogni voce estratta da un cedolino viene confrontata
+    con "codes" (codice voce, es. "F00880") e "keywords" (sottostringhe
+    nell'etichetta) per essere assegnata a una categoria.
+    """
+
+    __tablename__ = "reimbursement_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    codes = Column(JSON, nullable=True, default=list)     # es. ["F00880"]
+    keywords = Column(JSON, nullable=True, default=list)  # es. ["rimborso spese", "note spese"]
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
