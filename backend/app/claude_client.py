@@ -4,7 +4,7 @@ import re
 import time
 from anthropic import Anthropic, APIError, RateLimitError, APIConnectionError
 
-MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 
 _client = None
 
