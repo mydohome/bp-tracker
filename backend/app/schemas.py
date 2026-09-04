@@ -15,8 +15,13 @@ class PayslipOut(BaseModel):
     employer_label: Optional[str] = None
     gross_pay: float
     net_pay: float
+    net_pay_stated: Optional[float] = None
     reimbursements: float
     total_deductions: float
+    ral: Optional[float] = None
+    base_pay: Optional[float] = None
+    contingenza: Optional[float] = None
+    scatti: Optional[float] = None
     earnings_detail: Optional[List[Dict[str, Any]]] = None
     deductions_detail: Optional[List[Dict[str, Any]]] = None
     notes: Optional[str] = None
@@ -32,6 +37,7 @@ class TrendPoint(BaseModel):
     gross_pay: float
     net_pay: float
     reimbursements: float
+    ral: Optional[float] = None
 
 
 class ChatRequest(BaseModel):

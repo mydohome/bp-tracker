@@ -10,8 +10,10 @@ from .pdf_extract import extract_text_from_pdf
 from .anonymizer import anonymize_text
 from .claude_client import extract_payslip_data, ask_about_payslips
 from .reimbursement_check import reconcile_reimbursements
+from .migrations import run_migrations
 
 Base.metadata.create_all(bind=engine)
+run_migrations(engine)
 
 app = FastAPI(title="Payslip Tracker")
 
@@ -76,11 +78,23 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
         float(data.get("reimbursements") or 0), earnings_detail
     )
 
+    # Il modello estrae il netto ESATTAMENTE come riportato sul cedolino
+    # (net_pay_stated), che in Italia spesso include i rimborsi/trasferte
+    # aggiunti al "netto a pagare". Qui lo scorporiamo: net_pay diventa
+    # la sola componente retributiva netta, esclusi i rimborsi.
+    net_pay_stated = float(data.get("net_pay") or 0)
+    net_pay_salary = round(net_pay_stated - reimbursements, 2)
+
     record.employer_label = data.get("employer_label")
     record.gross_pay = float(data.get("gross_pay") or 0)
-    record.net_pay = float(data.get("net_pay") or 0)
+    record.net_pay = net_pay_salary
+    record.net_pay_stated = net_pay_stated
     record.reimbursements = reimbursements
     record.total_deductions = float(data.get("total_deductions") or 0)
+    record.ral = float(data["ral"]) if data.get("ral") not in (None, "") else None
+    record.base_pay = float(data.get("base_pay") or 0)
+    record.contingenza = float(data.get("contingenza") or 0)
+    record.scatti = float(data.get("scatti") or 0)
     record.earnings_detail = earnings_detail
     record.deductions_detail = data.get("deductions_detail") or []
     record.notes = reconciliation_note
@@ -131,6 +145,7 @@ def trend(db: Session = Depends(get_db)):
             gross_pay=r.gross_pay,
             net_pay=r.net_pay,
             reimbursements=r.reimbursements,
+            ral=r.ral,
         )
         for r in records
     ]
@@ -182,6 +197,10 @@ def chat(req: schemas.ChatRequest, db: Session = Depends(get_db)):
             "net_pay": r.net_pay,
             "reimbursements": r.reimbursements,
             "total_deductions": r.total_deductions,
+            "ral": r.ral,
+            "base_pay": r.base_pay,
+            "contingenza": r.contingenza,
+            "scatti": r.scatti,
         }
         for r in records
     ]

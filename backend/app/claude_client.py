@@ -46,6 +46,19 @@ Ogni voce di questo tipo trovata nel documento va:
 Se non trovi nessuna voce di questo tipo, usa "reimbursements": 0 — ma prima
 di concludere che sono assenti, ricontrolla l'intero testo una seconda volta.
 
+Cerca inoltre questi dati, tipicamente riportati nell'intestazione o nel
+riepilogo delle competenze fisse del cedolino:
+
+- RAL (Retribuzione Annua Lorda): spesso indicata in alto nel cedolino
+  come "RAL", "Retribuzione annua lorda", "Retribuzione annua", talvolta
+  vicino al livello di inquadramento. È un importo annuale, non mensile.
+- Paga base / minimo contrattuale / minimo tabellare: la voce fissa di
+  base della retribuzione lorda (esclusi scatti, superminimi, ecc.).
+- Contingenza (indennità di contingenza): spesso assente nei CCNL più
+  recenti perché assorbita nella paga base — se non la trovi, usa 0.
+- Scatti di anzianità (o "scatti maturati"): importo degli scatti, se
+  presenti come voce separata.
+
 Rispondi SOLO con un oggetto JSON valido, senza markdown, senza testo prima o dopo,
 con questa struttura esatta:
 
@@ -54,9 +67,13 @@ con questa struttura esatta:
   "month": <int 1-12, mese del cedolino>,
   "employer_label": <string breve e generica, es. "Azienda" o il nome societario se presente, altrimenti null>,
   "gross_pay": <float, totale competenze lorde del mese>,
-  "net_pay": <float, netto in busta>,
+  "net_pay": <float, netto ESATTAMENTE come riportato sul cedolino (es. "netto a pagare"/"netto in busta"), SENZA sottrarre nulla: se il cedolino include i rimborsi nel netto finale, riporta quel valore così com'è>,
   "reimbursements": <float, somma di tutte le voci di rimborso/trasferta/diaria individuate, 0 se davvero assenti>,
   "total_deductions": <float, totale trattenute/contributi/IRPEF>,
+  "ral": <float, Retribuzione Annua Lorda se indicata nel documento, altrimenti null>,
+  "base_pay": <float, paga base/minimo contrattuale, altrimenti null>,
+  "contingenza": <float, indennità di contingenza, 0 se assente/assorbita>,
+  "scatti": <float, scatti di anzianità, 0 se assenti>,
   "earnings_detail": [{"label": <string>, "amount": <float>}, ...],
   "deductions_detail": [{"label": <string>, "amount": <float>}, ...]
 }

@@ -109,16 +109,27 @@ Il backend è raggiungibile anche direttamente su `http://localhost:8000`
 
 ## Uso
 
-- Ogni mese, carica il PDF della busta paga dalla home page.
+- Ogni mese, carica il PDF della busta paga dalla home page (puoi selezionarne
+  più di uno insieme: vengono caricati e interpretati uno alla volta).
 - L'app riconosce automaticamente mese/anno: se ricarichi lo stesso mese,
   il record viene aggiornato (non duplicato).
+- **Netto**: rappresenta la sola componente retributiva netta, **esclusi i
+  rimborsi spese** (che vengono scorporati automaticamente dal "netto a
+  pagare" riportato sul cedolino). Il netto "così come stampato sul
+  cedolino" resta comunque salvato internamente per trasparenza.
+- **RAL, minimo (paga base), contingenza, scatti di anzianità**: tracciati
+  per ogni cedolino quando presenti nel documento, per seguirne l'andamento
+  nel tempo (es. un aumento della RAL o uno scatto maturato).
+- Tre grafici: andamento combinato lordo/netto/rimborsi, andamento del solo
+  netto, andamento della RAL nel tempo (a gradini, perché resta costante fino
+  al prossimo aumento).
 - Il grafico mostra l'andamento di lordo, netto e rimborsi nel tempo.
 - La tabella mostra la variazione (Δ) del netto rispetto al mese precedente,
   utile per individuare aumenti o tagli.
 - Nel box chat puoi chiedere cose come:
   - "Qual è stato il mese con il netto più alto?"
   - "Quanto ho ricevuto di rimborsi nell'ultimo anno?"
-  - "C'è stato un aumento negli ultimi 6 mesi?"
+  - "C'è stato un aumento della RAL negli ultimi 12 mesi?"
 
 ## Backup dei dati
 
