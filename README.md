@@ -37,6 +37,34 @@ campo tipiche delle buste paga italiane). È un buon livello di protezione
 ma non una garanzia assoluta al 100%: se il tuo cedolino ha un layout
 insolito, controlla `backend/app/anonymizer.py` e adatta i pattern se serve.
 
+## Applicare un aggiornamento ricevuto in chat (macOS)
+
+Ogni volta che ricevi un nuovo file `payslip-app.zip` in chat, salvalo in
+`~/Downloads` (nome predefinito) e lancia dalla cartella del progetto:
+
+```bash
+./apply-update.sh
+```
+
+Lo script:
+- trova automaticamente lo zip più recente in `~/Downloads` (oppure indicane
+  uno esplicitamente: `./apply-update.sh /percorso/file.zip`)
+- lo estrae e sincronizza i file nel repository, **senza mai toccare**
+  `.env` e senza sovrascrivere file che hai modificato a mano e non ancora
+  committato (es. la porta personalizzata in `docker-compose.yml`)
+- mostra un riepilogo di cosa è cambiato
+- fa commit e push su GitHub
+
+Per personalizzare il messaggio di commit:
+```bash
+./apply-update.sh ~/Downloads/payslip-app.zip "Descrizione della modifica"
+```
+
+Si ferma volutamente **prima** di ricostruire i container: dopo il push,
+esegui `./update.sh` (o `docker compose up -d --build`) per applicare le
+modifiche all'app in esecuzione — così hai sempre un momento di controllo
+tra "codice aggiornato su GitHub" e "app riavviata con il nuovo codice".
+
 ## Pubblicare il repository su GitHub
 
 Questo pacchetto contiene già un repository Git locale (`git init` + commit iniziale).

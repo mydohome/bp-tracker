@@ -6,8 +6,13 @@ FROM nginx:alpine
 # non deve MAI raggiungere un CDN esterno a runtime: niente più rotture
 # per blocchi DNS, ad-blocker, firewall aziendali o reti che filtrano
 # cdnjs.cloudflare.com.
+#
+# Usiamo l'alias di versione maggiore "@4" di jsDelivr (non un numero di
+# build fisso come "4.4.4"): risolve sempre automaticamente all'ultima
+# versione stabile della serie 4.x, quindi non si rompe se una build
+# specifica smette di essere ospitata dal CDN durante il tempo.
 RUN apk add --no-cache curl && \
-    curl -fsSL https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js \
+    curl -fsSL https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js \
       -o /usr/share/nginx/html/chart.umd.min.js && \
     apk del curl
 
