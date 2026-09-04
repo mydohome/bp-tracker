@@ -70,6 +70,7 @@
 
 <h1>📄 Tracker Buste Paga</h1>
 <div class="subtitle">Carica il PDF ogni mese: gli importi vengono estratti e archiviati automaticamente.</div>
+<div id="globalError" style="display:none; max-width:960px; margin:0 auto 16px; background:#3b1d1d; border:1px solid #f87171; color:#fca5a5; padding:12px 16px; border-radius:8px; font-size:13px;"></div>
 
 <div class="grid">
 
@@ -176,12 +177,35 @@ async function api(path, opts) {
 }
 
 async function refreshAll() {
-  const [payslips, trend, raises, categories] = await Promise.all([
+  // Promise.allSettled invece di Promise.all: se una singola chiamata fallisce
+  // (es. endpoint non ancora disponibile dopo un aggiornamento parziale),
+  // le altre sezioni della pagina (grafici, tabella, riepilogo) vengono
+  // comunque disegnate, invece di restare tutte vuote in silenzio.
+  const results = await Promise.allSettled([
     api("/payslips"),
     api("/stats/trend"),
     api("/stats/raises"),
     api("/reimbursement-categories"),
   ]);
+
+  const [payslipsR, trendR, raisesR, categoriesR] = results;
+  const errors = results
+    .map((r, i) => (r.status === "rejected" ? ["buste paga", "andamento", "aumenti", "categorie rimborsi"][i] + ": " + r.reason.message : null))
+    .filter(Boolean);
+
+  const errorBox = document.getElementById("globalError");
+  if (errors.length) {
+    errorBox.style.display = "block";
+    errorBox.textContent = "⚠️ Errore nel caricamento di alcuni dati (" + errors.join(" | ") + "). Verifica che il backend sia aggiornato e riavviato.";
+  } else {
+    errorBox.style.display = "none";
+  }
+
+  const payslips = payslipsR.status === "fulfilled" ? payslipsR.value : [];
+  const trend = trendR.status === "fulfilled" ? trendR.value : [];
+  const raises = raisesR.status === "fulfilled" ? raisesR.value : [];
+  const categories = categoriesR.status === "fulfilled" ? categoriesR.value : [];
+
   renderSummary(payslips);
   renderTable(payslips, raises);
   renderChart(trend);
@@ -463,7 +487,11 @@ document.getElementById("chatInput").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("chatBtn").click();
 });
 
-refreshAll().catch(() => {});
+refreshAll().catch(e => {
+  const errorBox = document.getElementById("globalError");
+  errorBox.style.display = "block";
+  errorBox.textContent = "⚠️ Errore nel caricamento della pagina: " + e.message;
+});
 </script>
 </body>
 </html>
