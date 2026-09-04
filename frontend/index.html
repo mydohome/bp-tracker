@@ -74,9 +74,10 @@
 
   <div class="card">
     <h2>Carica busta paga (PDF)</h2>
-    <input type="file" id="fileInput" accept="application/pdf" />
+    <input type="file" id="fileInput" accept="application/pdf" multiple />
     <button id="uploadBtn">Carica ed interpreta</button>
     <div class="status" id="uploadStatus"></div>
+    <div id="uploadList" style="margin-top:10px; font-size:13px;"></div>
     <div class="privacy-note">
       🔒 Prima dell'invio al modello, nome, codice fiscale, indirizzo, IBAN, email e telefono
       vengono rimossi automaticamente dal testo. Nel database restano solo gli importi.
@@ -166,12 +167,13 @@ function renderTable(payslips, raises) {
     const deltaHtml = delta === null || delta === undefined
       ? "—"
       : `<span class="${delta >= 0 ? 'pos' : 'neg'}">${delta >= 0 ? '+' : ''}€ ${delta.toFixed(2)}</span>`;
+    const reimbNote = p.notes ? ` <span title="${p.notes.replace(/"/g, '&quot;')}" style="cursor:help;">ℹ️</span>` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${MONTHS[p.month]} ${p.year}</td>
       <td>€ ${p.gross_pay.toFixed(2)}</td>
       <td>€ ${p.net_pay.toFixed(2)}</td>
-      <td>€ ${p.reimbursements.toFixed(2)}</td>
+      <td>€ ${p.reimbursements.toFixed(2)}${reimbNote}</td>
       <td>${deltaHtml}</td>
       <td><button data-id="${p.id}" class="delBtn" style="background:#262b36;color:#f87171;">✕</button></td>
     `;
@@ -213,21 +215,44 @@ function renderChart(trend) {
 document.getElementById("uploadBtn").addEventListener("click", async () => {
   const input = document.getElementById("fileInput");
   const status = document.getElementById("uploadStatus");
-  if (!input.files.length) { status.textContent = "Seleziona un PDF."; return; }
-  const fd = new FormData();
-  fd.append("file", input.files[0]);
-  status.textContent = "Interpretazione in corso…";
+  const listEl = document.getElementById("uploadList");
+  const files = Array.from(input.files);
+  if (!files.length) { status.textContent = "Seleziona uno o più PDF."; return; }
+
   document.getElementById("uploadBtn").disabled = true;
-  try {
-    await api("/upload", { method: "POST", body: fd });
-    status.textContent = "✅ Busta paga registrata.";
-    input.value = "";
-    refreshAll();
-  } catch (e) {
-    status.textContent = "❌ " + e.message;
-  } finally {
-    document.getElementById("uploadBtn").disabled = false;
+  listEl.innerHTML = "";
+
+  // Riga di stato per ciascun file, così si vede il progresso di ognuno.
+  const rows = files.map(f => {
+    const row = document.createElement("div");
+    row.textContent = `⏳ ${f.name} — in coda…`;
+    listEl.appendChild(row);
+    return row;
+  });
+
+  let okCount = 0, failCount = 0;
+
+  // Caricamento sequenziale (non in parallelo): evita di sovraccaricare
+  // le chiamate all'API di Claude e rende più leggibile il log di avanzamento.
+  for (let i = 0; i < files.length; i++) {
+    status.textContent = `Interpretazione ${i + 1}/${files.length}…`;
+    rows[i].textContent = `⏳ ${files[i].name} — interpretazione in corso…`;
+    const fd = new FormData();
+    fd.append("file", files[i]);
+    try {
+      await api("/upload", { method: "POST", body: fd });
+      rows[i].textContent = `✅ ${files[i].name} — registrata`;
+      okCount++;
+    } catch (e) {
+      rows[i].textContent = `❌ ${files[i].name} — ${e.message}`;
+      failCount++;
+    }
   }
+
+  status.textContent = `Completato: ${okCount} ok, ${failCount} falliti su ${files.length}.`;
+  input.value = "";
+  document.getElementById("uploadBtn").disabled = false;
+  refreshAll();
 });
 
 document.getElementById("chatBtn").addEventListener("click", async () => {

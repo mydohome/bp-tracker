@@ -9,6 +9,7 @@ from .database import engine, get_db, Base
 from .pdf_extract import extract_text_from_pdf
 from .anonymizer import anonymize_text
 from .claude_client import extract_payslip_data, ask_about_payslips
+from .reimbursement_check import reconcile_reimbursements
 
 Base.metadata.create_all(bind=engine)
 
@@ -70,13 +71,19 @@ async def upload_payslip(file: UploadFile = File(...), db: Session = Depends(get
         record = models.Payslip(year=year, month=month)
         db.add(record)
 
+    earnings_detail = data.get("earnings_detail") or []
+    reimbursements, reconciliation_note = reconcile_reimbursements(
+        float(data.get("reimbursements") or 0), earnings_detail
+    )
+
     record.employer_label = data.get("employer_label")
     record.gross_pay = float(data.get("gross_pay") or 0)
     record.net_pay = float(data.get("net_pay") or 0)
-    record.reimbursements = float(data.get("reimbursements") or 0)
+    record.reimbursements = reimbursements
     record.total_deductions = float(data.get("total_deductions") or 0)
-    record.earnings_detail = data.get("earnings_detail") or []
+    record.earnings_detail = earnings_detail
     record.deductions_detail = data.get("deductions_detail") or []
+    record.notes = reconciliation_note
 
     db.commit()
     db.refresh(record)

@@ -23,6 +23,28 @@ def get_client() -> Anthropic:
 EXTRACTION_SYSTEM_PROMPT = """Sei un motore di estrazione dati per buste paga italiane.
 Ricevi il testo (già anonimizzato: nome, codice fiscale, indirizzo e IBAN sono
 già stati rimossi) di UNA busta paga.
+
+Leggi TUTTO il testo con attenzione, incluse le righe in fondo al cedolino,
+le voci accessorie e le eventuali sezioni "dati per il conguaglio", "elementi
+non ricorrenti", "trasferte", "note spese": spesso i rimborsi sono elencati
+separatamente dal corpo principale delle competenze.
+
+Cerca ESPLICITAMENTE voci che indicano un rimborso, anche parziale, tra cui
+(elenco non esaustivo, cerca varianti simili e abbreviazioni):
+- "rimborso spese", "rimb. spese", "note spese"
+- "trasferta", "indennità di trasferta", "indennità trasferta estero"
+- "diaria", "diaria forfettaria"
+- "rimborso chilometrico", "rimborso km", "indennità chilometrica"
+- "rimborso pasti", "buoni pasto" solo se pagati in busta come importo (non il valore del ticket)
+- "anticipo spese", "rimborso spese sostenute"
+
+Ogni voce di questo tipo trovata nel documento va:
+1) inclusa in "earnings_detail" con la sua etichetta originale e il suo importo;
+2) sommata nel campo "reimbursements".
+
+Se non trovi nessuna voce di questo tipo, usa "reimbursements": 0 — ma prima
+di concludere che sono assenti, ricontrolla l'intero testo una seconda volta.
+
 Rispondi SOLO con un oggetto JSON valido, senza markdown, senza testo prima o dopo,
 con questa struttura esatta:
 
@@ -32,7 +54,7 @@ con questa struttura esatta:
   "employer_label": <string breve e generica, es. "Azienda" o il nome societario se presente, altrimenti null>,
   "gross_pay": <float, totale competenze lorde del mese>,
   "net_pay": <float, netto in busta>,
-  "reimbursements": <float, totale rimborsi spese/note spese/trasferte, 0 se assenti>,
+  "reimbursements": <float, somma di tutte le voci di rimborso/trasferta/diaria individuate, 0 se davvero assenti>,
   "total_deductions": <float, totale trattenute/contributi/IRPEF>,
   "earnings_detail": [{"label": <string>, "amount": <float>}, ...],
   "deductions_detail": [{"label": <string>, "amount": <float>}, ...]
