@@ -130,7 +130,11 @@
   .stat-tile.wide { grid-column: span 2; }
   .stat-icon { font-size: 20px; line-height: 1; margin-bottom: 2px; }
   .stat-value { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
-  .stat-label { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .stat-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: var(--text);
+    background: rgba(255,255,255,0.14); padding: 3px 10px; border-radius: var(--radius-pill);
+    width: fit-content; letter-spacing: 0.01em;
+  }
 
   /* Badge di variazione % anno su anno */
   .year-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -141,6 +145,38 @@
   }
   .year-badge .yb-year { font-size: 11px; color: var(--muted); font-weight: 600; }
   .year-badge .yb-delta { font-size: 13px; font-weight: 700; }
+
+  /* Pulsante ingranaggio (impostazioni categorie rimborsi) */
+  .gear-btn {
+    position: fixed; top: 20px; right: 20px; z-index: 40;
+    width: 42px; height: 42px; border-radius: 50%; background: var(--card);
+    border: 1px solid var(--card-border); color: var(--text); font-size: 18px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: var(--shadow-card); transition: transform 0.15s ease, background 0.15s ease;
+    padding: 0;
+  }
+  .gear-btn:hover { transform: rotate(25deg); background: var(--accent-soft); }
+
+  /* Modale impostazioni */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 50; align-items: flex-start; justify-content: center; padding: 60px 16px;
+    overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-content {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-lg);
+    padding: 24px; max-width: 560px; width: 100%; box-shadow: var(--shadow-card);
+  }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .modal-close {
+    background: rgba(255,255,255,0.06); color: var(--muted); border-radius: 50%;
+    width: 30px; height: 30px; padding: 0; font-size: 14px;
+  }
+
+  /* Selettore anno */
+  .year-filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .year-filter-row select { padding: 8px 12px; }
 </style>
 </head>
 <body>
@@ -148,6 +184,34 @@
 <h1>📄 Tracker Buste Paga</h1>
 <div class="subtitle">Carica il PDF ogni mese: gli importi vengono estratti e archiviati automaticamente.</div>
 <div id="globalError" style="display:none; max-width:960px; margin:0 auto 16px; background:#3b1d1d; border:1px solid #f87171; color:#fca5a5; padding:12px 16px; border-radius:8px; font-size:13px;"></div>
+
+<button class="gear-btn" id="openCategoriesBtn" title="Categorie rimborsi">⚙️</button>
+
+<div class="modal-overlay" id="categoriesModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="margin:0;">⚙️ Categorie rimborsi</h2>
+      <button class="modal-close" id="closeCategoriesBtn">✕</button>
+    </div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+      Ogni voce del cedolino viene assegnata a una categoria in base al codice voce
+      e/o a parole chiave contenute nell'etichetta. Le voci non riconosciute finiscono
+      in "Altri rimborsi".
+    </div>
+    <div id="categoryList" style="margin-bottom:16px;"></div>
+
+    <div style="border-top:1px solid var(--card-border); padding-top:16px;">
+      <div style="font-size:12.5px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.03em; font-weight:600;">Aggiungi categoria</div>
+      <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+        <input id="catName" placeholder="Nome categoria (es. Buoni pasto)" />
+        <input id="catCodes" placeholder="Codici voce, separati da virgola (opzionale, es. 000512)" />
+        <input id="catKeywords" placeholder="Parole chiave, separate da virgola (es. buono pasto, ticket)" />
+        <button id="addCatBtn" style="width:fit-content;">Aggiungi categoria</button>
+        <div class="status" id="catStatus"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="grid">
 
@@ -207,6 +271,12 @@
 
   <div class="card full">
     <h2>Storico mensile</h2>
+    <div class="year-filter-row">
+      <label style="font-size:13px; color:var(--muted);">Anno:</label>
+      <select id="yearFilter">
+        <option value="all">Tutti gli anni</option>
+      </select>
+    </div>
     <div class="table-wrap">
     <table>
       <thead>
@@ -217,27 +287,6 @@
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
-    </div>
-  </div>
-
-  <div class="card full">
-    <h2>⚙️ Categorie rimborsi</h2>
-    <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">
-      Ogni voce del cedolino viene assegnata a una categoria in base al codice voce
-      e/o a parole chiave contenute nell'etichetta. Le voci non riconosciute finiscono
-      in "Altri rimborsi".
-    </div>
-    <div id="categoryList" style="margin-bottom:16px;"></div>
-
-    <div style="border-top:1px solid var(--card-border); padding-top:16px;">
-      <div style="font-size:12.5px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.03em; font-weight:600;">Aggiungi categoria</div>
-      <div style="display:grid; grid-template-columns:1fr; gap:10px;">
-        <input id="catName" placeholder="Nome categoria (es. Buoni pasto)" />
-        <input id="catCodes" placeholder="Codici voce, separati da virgola (opzionale, es. 000512)" />
-        <input id="catKeywords" placeholder="Parole chiave, separate da virgola (es. buono pasto, ticket)" />
-        <button id="addCatBtn" style="width:fit-content;">Aggiungi categoria</button>
-        <div class="status" id="catStatus"></div>
-      </div>
     </div>
   </div>
 
@@ -261,6 +310,12 @@ let chartInstance = null;
 let netChartInstance = null;
 let ralChartInstance = null;
 let netByYearChartInstance = null;
+
+// Cache dell'ultimo dato ricevuto, per poter riapplicare il filtro anno
+// senza dover richiamare le API ogni volta che l'utente cambia selezione.
+let allPayslips = [];
+let allTrend = [];
+let allRaises = [];
 
 async function api(path, opts) {
   const res = await fetch(`/api${path}`, opts);
@@ -309,14 +364,52 @@ async function refreshAll() {
     document.getElementById("mensilitaSelect").value = String(mensilita);
   }
 
+  allPayslips = payslips;
+  allTrend = trend;
+  allRaises = raises;
+  populateYearFilter(payslips);
+
   renderSummary(payslips);
-  renderTable(payslips, raises);
-  renderChart(trend);
-  renderNetChart(trend);
   renderNetByYearChart(payslips);
   renderRalChart(ralByYear);
   renderCategories(categories);
+  applyYearFilter();  // disegna tabella + grafici mensili in base al filtro corrente
 }
+
+// Popola il menu a tendina del filtro anno con gli anni effettivamente
+// presenti nei dati, senza distruggere la selezione già scelta dall'utente.
+function populateYearFilter(payslips) {
+  const select = document.getElementById("yearFilter");
+  const currentValue = select.value || "all";
+  const years = [...new Set(payslips.map(p => p.year))].sort((a, b) => b - a);
+
+  select.innerHTML = `<option value="all">Tutti gli anni</option>` +
+    years.map(y => `<option value="${y}">${y}</option>`).join("");
+
+  // Ripristina la selezione precedente se ancora valida, altrimenti "Tutti".
+  select.value = (currentValue === "all" || years.includes(Number(currentValue)))
+    ? currentValue
+    : "all";
+}
+
+// Filtra tabella e grafici "per mese" (Andamento lordo/netto/rimborsi,
+// Andamento del netto) in base all'anno scelto. I grafici di confronto tra
+// anni (Media netto per anno, RAL per anno) restano sempre completi, dato
+// che il loro scopo è proprio confrontare più anni tra loro.
+function applyYearFilter() {
+  const selected = document.getElementById("yearFilter").value;
+  const filterFn = selected === "all" ? () => true : (item) => String(item.year) === selected;
+
+  const filteredPayslips = allPayslips.filter(filterFn);
+  const filteredTrend = allTrend.filter(filterFn);
+  const filteredRaises = allRaises.filter(filterFn);
+
+  renderTable(filteredPayslips, filteredRaises);
+  renderChart(filteredTrend);
+  renderNetChart(filteredTrend);
+}
+
+document.getElementById("yearFilter").addEventListener("change", applyYearFilter);
 
 function renderSummary(payslips) {
   const el = document.getElementById("summary");
@@ -725,6 +818,16 @@ document.getElementById("chatBtn").addEventListener("click", async () => {
 });
 document.getElementById("chatInput").addEventListener("keydown", e => {
   if (e.key === "Enter") document.getElementById("chatBtn").click();
+});
+
+document.getElementById("openCategoriesBtn").addEventListener("click", () => {
+  document.getElementById("categoriesModal").classList.add("open");
+});
+document.getElementById("closeCategoriesBtn").addEventListener("click", () => {
+  document.getElementById("categoriesModal").classList.remove("open");
+});
+document.getElementById("categoriesModal").addEventListener("click", (e) => {
+  if (e.target.id === "categoriesModal") e.target.classList.remove("open");
 });
 
 refreshAll().catch(e => {
